@@ -1,5 +1,7 @@
 from datetime import datetime
 from pathlib import Path
+import os
+import tempfile
 
 
 class Memory:
@@ -54,14 +56,14 @@ class Memory:
     # ── 写入（含快照） ───────────────────────────────────
 
     def update_profile(self, content: str):
-        """更新用户画像：旧版存入 history/，然后覆盖写入。"""
+        """更新用户画像：旧版存入 history/，然后覆盖写入（原子操作，防写崩）。"""
         self._snapshot(self.profile_path)
-        self.profile_path.write_text(content, encoding="utf-8")
+        self._atomic_write(self.profile_path, content)
 
     def update_projects(self, content: str):
-        """更新项目状态：旧版存入 history/，然后覆盖写入。"""
+        """更新项目状态：旧版存入 history/，然后覆盖写入（原子操作，防写崩）。"""
         self._snapshot(self.projects_path)
-        self.projects_path.write_text(content, encoding="utf-8")
+        self._atomic_write(self.projects_path, content)
 
     def list_snapshots(self) -> list[Path]:
         """列出所有历史快照，按时间倒序。"""
@@ -71,9 +73,10 @@ class Memory:
     # ── 内部方法 ──────────────────────────────────────────
 
     def _snapshot(self, filepath: Path):
-        """将当前文件内容复制到 history/ 目录，文件名带时间戳。
+        """将当前文件内容复制到 history/ 目录，文件名带微秒时间戳。
 
         只对已有内容的文件做快照（空文件或纯模板文件跳过）。
+        如果内容与最近一次快照相同，跳过本次快照。
         """
         if not filepath.exists():
             return
@@ -82,11 +85,31 @@ class Memory:
         if not content:
             return
 
-        # 生成带时间戳的快照文件名
-        stem = filepath.stem  # "profile" or "projects"
-        timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        stem = filepath.stem
+        # 检查是否与最新快照内容相同（避免重复快照）
+        latest = self._latest_snapshot(stem)
+        if latest and latest.read_text(encoding="utf-8").strip() == content:
+            return
+
+        # 微秒时间戳，避免同一秒内两次快照文件名碰撞
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S-%f")
         snapshot_path = self.history_dir / f"{stem}-{timestamp}.md"
         snapshot_path.write_text(content, encoding="utf-8")
+
+    def _latest_snapshot(self, stem: str) -> Path | None:
+        """找到指定前缀的最新快照文件。"""
+        candidates = sorted(
+            self.history_dir.glob(f"{stem}-*.md"),
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
+
+    @staticmethod
+    def _atomic_write(filepath: Path, content: str):
+        """原子写入：先写临时文件，再 rename，防止写崩丢数据。"""
+        tmp = filepath.with_suffix(filepath.suffix + ".tmp")
+        tmp.write_text(content, encoding="utf-8")
+        os.replace(tmp, filepath)  # Windows 上也是原子操作
 
     def _ensure_file(self, path: Path, default_content: str):
         """如果文件不存在，用默认内容创建。"""

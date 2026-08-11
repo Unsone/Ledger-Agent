@@ -1,3 +1,4 @@
+import re
 import yaml
 from pathlib import Path
 
@@ -57,10 +58,19 @@ class Executor:
             }
         """
         results = []
+        step_context = {}  # {"1": "result string", "2": "result string"}
 
         for step in plan.get("steps", []):
+            # 展开前序步骤的结果引用（{step_N_result} → 实际值）
+            step = self._expand_step_refs(step, step_context)
+
             result = self.execute_step(step, auto_confirm=auto_confirm)
             results.append(result)
+
+            # 成功执行的步骤，将其结果存入上下文供后续步骤引用
+            step_key = str(step.get("id", len(results)))
+            if result["success"] and result["result"] is not None:
+                step_context[step_key] = str(result["result"])
 
             # 判断是否为"真失败"（block/skip 是安全决策，不算执行失败）
             is_terminal_failure = (
@@ -186,6 +196,46 @@ class Executor:
             return "confirm"
 
         return "allow"
+
+    # ── 步骤引用展开 ──────────────────────────────────────
+
+    @staticmethod
+    def _expand_step_refs(step: dict, step_context: dict[str, str]) -> dict:
+        """展开步骤中的 {step_N_result} 占位符，替换为前序步骤的实际输出。
+
+        支持在 params 的所有字符串值、以及 action 文本中做替换。
+        占位符格式：{step_1_result} 引用步骤 1 的输出。
+        """
+        if not step_context:
+            return step
+
+        # 构建替换映射：{step_1_result} → 实际值
+        replacements = {}
+        for step_id, value in step_context.items():
+            replacements[f"{{step_{step_id}_result}}"] = value
+            # 截断版本：最多 500 字符，避免命令过长
+            if len(value) > 500:
+                replacements[f"{{step_{step_id}_result}}"] = value[:500] + "..."
+
+        # 替换 action
+        action = step.get("action", "")
+        for placeholder, value in replacements.items():
+            action = action.replace(placeholder, value)
+        step = dict(step)  # 浅拷贝，避免修改原始 plan
+        step["action"] = action
+
+        # 替换 params 中的所有字符串值
+        params = step.get("params", {})
+        if params:
+            new_params = {}
+            for key, val in params.items():
+                if isinstance(val, str):
+                    for placeholder, value in replacements.items():
+                        val = val.replace(placeholder, value)
+                new_params[key] = val
+            step["params"] = new_params
+
+        return step
 
     # ── 辅助方法 ──────────────────────────────────────────
 

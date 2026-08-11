@@ -13,16 +13,18 @@ class Planner:
     # JSON 解析失败时的最大重试次数
     MAX_RETRIES = 2
 
-    def __init__(self, llm: LLM, planner_prompt: str, tools_registry: dict = None):
+    def __init__(self, llm: LLM, planner_prompt: str, tools_registry: dict = None, max_steps: int = 10):
         """
         Args:
             llm: LLM 实例（共享，不新建）
             planner_prompt: 规划 prompt 模板，含 {tools_description} 占位符
             tools_registry: {"tool_name": ToolInstance, ...}，用于生成工具描述
+            max_steps: 单次计划最多允许的步骤数（从 config 读取，默认 10）
         """
         self.llm = llm
         self.prompt_template = planner_prompt
         self.tools_registry = tools_registry or {}
+        self.max_steps = max_steps
 
     def plan(self, task: str, context: str = "") -> dict:
         """将自然语言任务拆解为结构化步骤。
@@ -52,6 +54,7 @@ class Planner:
         ]
 
         last_error = None
+        raw = ""  # 初始化，防止 LLM 调用直接抛异常时 UnboundLocalError
         for attempt in range(self.MAX_RETRIES + 1):
             try:
                 raw = self.llm.chat(messages)
@@ -61,7 +64,6 @@ class Planner:
             except (json.JSONDecodeError, ValueError) as e:
                 last_error = e
                 if attempt < self.MAX_RETRIES:
-                    # 要求 LLM 修正格式
                     messages.append({"role": "assistant", "content": raw})
                     messages.append(
                         {
@@ -71,6 +73,13 @@ class Planner:
                                 "请**只输出**正确的 JSON 对象，不要加 markdown 代码块标记。"
                             ),
                         }
+                    )
+            except Exception as e:
+                # LLM 调用本身的错误（网络、API 等），也重试
+                last_error = e
+                if attempt >= self.MAX_RETRIES:
+                    raise ValueError(
+                        f"Planner LLM 调用失败（{self.MAX_RETRIES + 1} 次尝试）。最后错误：{e}"
                     )
 
         raise ValueError(f"Planner 在 {self.MAX_RETRIES + 1} 次尝试后仍无法输出合法 JSON。最后错误：{last_error}")
@@ -145,9 +154,8 @@ class Planner:
 
         return json.loads(raw)
 
-    @staticmethod
-    def _validate(result: dict):
-        """验证 Planner 输出的 JSON 结构是否符合规范。"""
+    def _validate(self, result: dict):
+        """验证 Planner 输出的 JSON 结构是否符合规范（结构 + 安全 + 步数限制）。"""
         if not isinstance(result, dict):
             raise ValueError("输出必须是 JSON 对象（dict）")
 
@@ -158,12 +166,34 @@ class Planner:
         if not isinstance(steps, list) or len(steps) == 0:
             raise ValueError("'steps' 必须是非空数组")
 
+        # 强制 max_steps（config.yaml 配置，默认 10）
+        if len(steps) > self.max_steps:
+            raise ValueError(
+                f"步骤数 {len(steps)} 超过最大限制 {self.max_steps}，请合并或精简"
+            )
+
+        valid_risks = {"low", "medium", "high"}
+        valid_tools = set(self.tools_registry.keys()) | {"none"}
+
         for i, step in enumerate(steps):
             if not isinstance(step, dict):
                 raise ValueError(f"steps[{i}] 必须是对象")
             for field in ("id", "action", "tool", "risk"):
                 if field not in step:
                     raise ValueError(f"steps[{i}] 缺少 '{field}' 字段")
+
+            # 校验 risk 值（防止 typo 如 "highh" 绕过安全检查）
+            if step["risk"] not in valid_risks:
+                raise ValueError(
+                    f"steps[{i}] risk='{step['risk']}' 无效，必须是 low/medium/high"
+                )
+
+            # 校验 tool 存在
+            if step["tool"] not in valid_tools:
+                raise ValueError(
+                    f"steps[{i}] tool='{step['tool']}' 不在可用工具列表中 ({', '.join(sorted(valid_tools))})"
+                )
+
             # 自动补齐 params
             if "params" not in step:
                 step["params"] = {}

@@ -71,16 +71,38 @@ planner_prompt: |
   - 如果任务不需要工具（纯信息查询、建议类），tool 填 "none"，params 填 {}
   - **绝对不要输出 JSON 以外的任何内容**
 
+  ## 步骤间数据传递（Step Chaining）
+
+  后面的步骤可以引用前面步骤的执行结果，使用占位符 `{step_N_result}`：
+
+  **示例：先列目录，再删除找到的临时文件**
+  ```json
+  {
+    "goal": "清理临时文件",
+    "steps": [
+      {"id": 1, "action": "查找临时文件", "tool": "shell",
+       "params": {"command": "dir /b *.tmp"}, "risk": "low"},
+      {"id": 2, "action": "删除步骤1找到的临时文件", "tool": "shell",
+       "params": {"command": "del /q {step_1_result}"}, "risk": "medium"}
+    ]
+  }
+  ```
+  步骤 2 执行时，`{step_1_result}` 会被自动替换为步骤 1 的实际输出。
+
+  **关键规则**：
+  - 占位符格式：`{step_N_result}`，N 是步骤 id
+  - 只能引用**前序**步骤（id 比自己小的）
+  - 如果引用的步骤执行失败，占位符不会被替换（保持原样）
+  - 前序步骤输出超过 500 字符时会被自动截断
+  - 合理使用可避免"瞎猜"：先查再操作，而不是靠推断
+
   ## 重要：文件写入的编码和路径问题
 
   ### 路径规范
   - **绝对不要从用户画像中推断文件系统路径**。即使用户画像说"称呼: 张三"，他的 Windows 用户名可能是 `29724`。不要用称呼去拼路径
-  - **永远使用 `$HOME` 环境变量代替用户目录**。例如写 `$HOME/Downloads/file.txt`，而不是 `C:/Users/Kaiming Zhao/Downloads/file.txt`
-  - bash 会自动展开 `$HOME` 为实际路径（如 `/c/Users/29724`）
-  - 如果用 python -c，把 `$HOME` 放在双引号内让 bash 先展开：
-    `python -c "open('$HOME/Downloads/file.txt', 'w', encoding='utf-8').write('''content''')"`
-  - **绝对不要对路径进行 URL 编码**（不要 `%20`）
-  - 路径中有空格时 bash 的 `$HOME` 展开已经包含在单引号内，不需要额外引号
+  - **永远使用 `$HOME` 或 `%USERPROFILE%` 环境变量代替用户目录**。系统会自动将它们展开为实际路径
+  - 例如写 `$HOME/Downloads/file.txt`，而不要写 `C:/Users/Kaiming Zhao/Downloads/file.txt`
+  - **绝对不要对路径进行 URL 编码**（不要 `%20` 之类）
 
   ### 文件写入方式
   - **所有创建/写入文件的操作，一律使用 Python**：
@@ -92,4 +114,4 @@ planner_prompt: |
   - 当前环境是 **Windows cmd.exe**，不要使用 Unix 命令
   - `mkdir` 不需要 `-p` 参数（Windows 默认递归创建目录）；直接用 `mkdir "路径"`
   - `ls` → `dir`，`rm` → `del /q`，`rm -rf` → `rmdir /s /q`，`cat` → `type`
-  - 目录路径分隔符可以用 `/`（Python 和大部分 Windows 命令都兼容）
+  - 目录路径分隔符用 `/` 而非 `\`（Python 和大部分 Windows 命令都兼容 `/`）

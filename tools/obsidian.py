@@ -191,8 +191,11 @@ class ObsidianTool(Tool):
 
         resolved = (self.vault_path / normalized).resolve()
 
-        # 二次确认没有穿越到 vault 外面
-        if not str(resolved).startswith(str(self.vault_path)):
+        # 二次确认没有穿越到 vault 外面（is_relative_to 比 startswith 严格，
+        # 防止 obsidian-evil 这种兄弟目录绕过前缀检查）
+        try:
+            resolved.relative_to(self.vault_path)
+        except ValueError:
             raise ValueError(f"路径穿越检测: {path}")
 
         return resolved

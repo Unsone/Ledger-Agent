@@ -10,6 +10,7 @@ from agent.executor import Executor
 from tools.shell import ShellTool
 from tools.task_inbox import TaskInboxTool
 from tools.obsidian import ObsidianTool
+from tools.web_search import WebSearchTool
 
 
 class PersonalAgent:
@@ -57,6 +58,7 @@ class PersonalAgent:
             "shell": ShellTool(),
             "obsidian": ObsidianTool(),
             "task_inbox": TaskInboxTool(),
+            "web_search": WebSearchTool(),
         }
 
         # 初始化 Planner（Phase 3）
@@ -64,6 +66,7 @@ class PersonalAgent:
             llm=self.llm,
             planner_prompt=self.prompts.get("planner_prompt", ""),
             tools_registry=self.tools_registry,
+            max_steps=self.config.get("agent", {}).get("max_steps", 10),
         )
 
         # 初始化 Executor（Phase 7）
@@ -250,38 +253,75 @@ class PersonalAgent:
     # 执行失败后自动纠错重试的最大次数
     MAX_RETRIES = 3
 
+    # 自检回路最多轮数（防止无限循环）
+    MAX_VERIFY_ROUNDS = 2
+
     def _handle_run(self, task: str, auto_confirm: bool = False):
-        """处理 /run 命令：规划 → 确认 → 执行 → 失败自动纠错重试 → 记录。
+        """处理 /run 命令：规划 → 确认 → 执行 → 自检 → 不够就补救。
 
-        执行失败时会将错误反馈给 Planner，自动修正后重试，最多 3 次。
+        两层纠错：
+        1. 执行层：命令失败 → 自动 fix 重试（_execute_with_retry）
+        2. 语义层：结果不足以回答用户 → 自动生成补救任务重新规划（自检回路）
         """
-        # 1. 规划
-        print(f"\n[规划中...] {task}\n")
-        try:
-            plan = self.plan_task(task)
-        except ValueError as e:
-            print(f"[规划失败] {e}\n")
-            return
+        current_task = task
+        all_results = []  # 累积所有轮次的执行结果
+        final_answer = None
 
-        self._print_plan(plan)
+        for verify_round in range(self.MAX_VERIFY_ROUNDS + 1):
+            is_retry = verify_round > 0
+            is_last = verify_round >= self.MAX_VERIFY_ROUNDS
 
-        # 2. 确认是否执行
-        if not auto_confirm:
-            answer = input("是否执行? [Y/n]: ").strip().lower()
-            if answer and answer not in ("y", "yes"):
-                print("[取消] 已取消执行。\n")
+            # 1. 规划
+            print(f"\n[规划中...] {current_task}\n")
+            try:
+                plan = self.plan_task(current_task)
+            except ValueError as e:
+                print(f"[规划失败] {e}\n")
                 return
-        else:
-            print("[自动确认模式] 跳过所有确认。")
 
-        # 3. 执行 + 自动纠错重试
-        exec_result = self._execute_with_retry(plan, task, auto_confirm)
+            self._print_plan(plan)
 
-        # 4. 展示最终结果
-        self._print_execution_result(exec_result)
+            # 2. 确认（仅第一轮需要）
+            if not is_retry:
+                if not auto_confirm:
+                    answer = input("是否执行? [Y/n]: ").strip().lower()
+                    if answer and answer not in ("y", "yes"):
+                        print("[取消] 已取消执行。\n")
+                        return
+                else:
+                    print("[自动确认模式] 跳过所有确认。")
+            else:
+                print("[自检触发] 上一轮结果不充分，自动补救...")
 
-        # 5. 写入 Daily 日记
-        self._record_execution(exec_result, auto_confirm)
+            # 3. 执行 + 纠错重试
+            exec_result = self._execute_with_retry(plan, current_task, auto_confirm)
+            self._print_execution_result(exec_result)
+            all_results.append(exec_result)
+
+            # 4. 没有成功步骤 → 不再继续
+            if exec_result["success_count"] == 0:
+                print("[无法继续] 所有步骤均失败。\n")
+                return
+
+            # 5. 综合 + 自检
+            print(f"\n[自检中...]\n")
+            verified = self._verify_and_synthesize(task, all_results, is_last=is_last)
+
+            if verified.get("sufficient") or is_last:
+                final_answer = verified.get("answer", "")
+                print(f"{final_answer}\n")
+                break
+            else:
+                # 不够 → 生成补救任务，进入下一轮
+                gap = verified.get("gap_description", "")
+                missing = verified.get("missing_action", "")
+                print(f"[自检: 不充分] {gap}")
+                print(f"[自动补救] {missing}\n")
+                current_task = missing
+
+        # 6. 写入 Daily 日记（记录最后一轮）
+        if all_results:
+            self._record_execution(all_results[-1], auto_confirm)
 
     def _execute_with_retry(self, plan: dict, task: str, auto_confirm: bool) -> dict:
         """执行计划，失败时自动纠错重试。
@@ -334,6 +374,100 @@ class PersonalAgent:
         print(f"\n  ⚠ 需要确认:\n  {prompt}")
         answer = input("  执行? [y/N]: ").strip().lower()
         return answer in ("y", "yes")
+
+    def _verify_and_synthesize(self, task: str, all_results: list[dict],
+                                is_last: bool) -> dict:
+        """综合所有执行结果 + 自检：答案是否满足用户意图？
+
+        合并多轮执行结果 → LLM 综合答案 → LLM 自检是否充分 →
+        如果不充分且不是最后一轮，生成补救任务。
+
+        Returns:
+            {
+                "sufficient": bool,       # 答案是否满足用户意图
+                "answer": str,            # 综合后的自然语言回答
+                "gap_description": str,   # 如果不充分，缺少什么
+                "missing_action": str,    # 如果不充分，该做什么（可直接作为 Planner 输入）
+            }
+        """
+        # 收集所有轮次、所有成功步骤的结果
+        snippets = []
+        for er in all_results:
+            for r in er.get("results", []):
+                if r["success"] and r.get("result") and r["tool"] != "none":
+                    output = str(r["result"])[:1500]
+                    snippets.append(f"[{r['tool']}] {r['action']}\n{output}")
+
+        if not snippets:
+            return {"sufficient": True, "answer": "（无执行结果）",
+                    "gap_description": "", "missing_action": ""}
+
+        all_output = "\n\n---\n\n".join(snippets)
+
+        # Step A: 综合答案
+        synthesize_prompt = (
+            f"用户的问题是：{task}\n\n"
+            f"以下是执行该任务得到的原始数据：\n\n{all_output}\n\n"
+            f"请根据以上数据，用中文直接回答用户的问题。"
+            f"不要说你看到了什么搜索结果——直接综合成答案。"
+            f"如果数据不足以完全回答问题，诚实说明已知的部分和缺失的部分。"
+        )
+
+        answer = ""
+        try:
+            answer = self.llm.chat([
+                {"role": "system", "content": "你是 Personal Agent。根据给定的执行结果，直接回答用户的问题。简洁、准确、用中文。"},
+                {"role": "user", "content": synthesize_prompt},
+            ])
+        except Exception:
+            return {"sufficient": True, "answer": "（综合回答生成失败）",
+                    "gap_description": "", "missing_action": ""}
+
+        # 最后一轮不再自检，直接输出
+        if is_last:
+            return {"sufficient": True, "answer": answer,
+                    "gap_description": "", "missing_action": ""}
+
+        # Step B: 自检 —— 答案是否充分？
+        verify_prompt = (
+            f"用户提出的任务是：\n{task}\n\n"
+            f"我们为回答这个问题做了搜索/执行，得到了以下数据：\n{all_output}\n\n"
+            f"基于这些数据，我们给出的回答是：\n{answer}\n\n"
+            f"请判断：这个回答是否**充分、完整地**满足了用户的任务要求？\n\n"
+            f"判断标准：\n"
+            f"- 如果用户问'是谁'，回答应该包含身份、背景、关键事实，而不是只有搜索摘要\n"
+            f"- 如果用户问'创建文件'，回答应该确认文件已创建、路径、内容\n"
+            f"- 如果用户问'检查是否存在'，回答应该明确说明存在与否、在哪里\n"
+            f"- 搜索结果只有标题和摘要而缺少详细内容 → 不充分\n"
+            f"- 搜索结果摘要本身已经包含了问题的完整答案 → 充分\n\n"
+            f"请**只输出**一个 JSON 对象：\n"
+            f'{{"sufficient": true/false, '
+            f'"gap": "如果不充分，一句话说明缺什么", '
+            f'"action": "如果不充分，一句具体的任务描述（如：获取 URL X 的详细内容 或 搜索关键词 Y），供 Planner 直接使用"}}'
+        )
+
+        try:
+            import json
+            raw = self.llm.chat([
+                {"role": "system", "content": "你是质量检查器。只输出 JSON，不要其他内容。"},
+                {"role": "user", "content": verify_prompt},
+            ])
+            # 剥离可能的 markdown 代码块
+            m = __import__('re').search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, __import__('re').DOTALL)
+            if m:
+                raw = m.group(1).strip()
+            verdict = json.loads(raw)
+
+            return {
+                "sufficient": verdict.get("sufficient", True),
+                "answer": answer,
+                "gap_description": verdict.get("gap", ""),
+                "missing_action": verdict.get("action", ""),
+            }
+        except Exception:
+            # 自检失败 → 默认充分，不阻塞
+            return {"sufficient": True, "answer": answer,
+                    "gap_description": "", "missing_action": ""}
 
     @staticmethod
     def _print_execution_result(result: dict):
