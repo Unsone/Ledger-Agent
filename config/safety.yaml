@@ -1,0 +1,18 @@
+# 危险命令规则 —— 独立于代码，方便随时增删而不用改 executor.py
+# mode: block 表示直接拒绝执行；confirm 表示需要用户二次确认才能执行
+
+blocked_patterns:
+  - "rm -rf"
+  - "rm -rf /"
+  - "format "
+  - "shutdown"
+  - "mkfs"
+  - ":(){:|:&};:"     # fork bomb
+
+confirm_patterns:
+  - "git push"
+  - "git reset --hard"
+  - "del /"
+  - "Remove-Item"
+  - "pip install"
+  - "npm install"

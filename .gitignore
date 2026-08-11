@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Secrets & environment
+.env
+
+# Virtual environments
+.venv
+venv/
+
+# Sensitive / personal data
+memory/history/
+logs/
+
+# Claude Code local settings
+.claude/
+
+# IDE & editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Obsidian (local config only — vault content IS tracked)
+.obsidian/
+.Trash-*/

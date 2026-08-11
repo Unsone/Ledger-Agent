@@ -1,0 +1,10 @@
+# Personal Agent 主配置文件
+
+llm:
+  provider: "deepseek"
+  model: "deepseek-chat"
+  temperature: 0.3
+
+agent:
+  max_steps: 10
+  name: "PersonalAgent"
