@@ -5,6 +5,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from agent.llm import LLM
 from agent.memory import Memory
+from agent.logger import get_logger
+
+_log = get_logger(__name__)
 from agent.planner import Planner
 from agent.executor import Executor
 from tools.shell import ShellTool
@@ -257,12 +260,8 @@ class PersonalAgent:
     MAX_VERIFY_ROUNDS = 2
 
     def _handle_run(self, task: str, auto_confirm: bool = False):
-        """处理 /run 命令：规划 → 确认 → 执行 → 自检 → 不够就补救。
-
-        两层纠错：
-        1. 执行层：命令失败 → 自动 fix 重试（_execute_with_retry）
-        2. 语义层：结果不足以回答用户 → 自动生成补救任务重新规划（自检回路）
-        """
+        """处理 /run 命令：规划 → 确认 → 执行 → 自检 → 不够就补救。"""
+        _log.info("TASK_START task=%s auto=%s", task[:100], auto_confirm)
         current_task = task
         all_results = []  # 累积所有轮次的执行结果
         final_answer = None
@@ -309,12 +308,13 @@ class PersonalAgent:
 
             if verified.get("sufficient") or is_last:
                 final_answer = verified.get("answer", "")
+                _log.info("VERIFY sufficient=%s round=%s", verified.get("sufficient"), verify_round)
                 print(f"{final_answer}\n")
                 break
             else:
-                # 不够 → 生成补救任务，进入下一轮
                 gap = verified.get("gap_description", "")
                 missing = verified.get("missing_action", "")
+                _log.info("VERIFY insufficient round=%s gap=%s", verify_round, gap[:120])
                 print(f"[自检: 不充分] {gap}")
                 print(f"[自动补救] {missing}\n")
                 current_task = missing
@@ -334,6 +334,7 @@ class PersonalAgent:
         while retry <= self.MAX_RETRIES:
             if retry > 0:
                 print(f"\n[自动纠错 第 {retry}/{self.MAX_RETRIES} 次] 分析错误，重新规划...\n")
+                _log.warning("RETRY attempt=%s/%s task=%s", retry, self.MAX_RETRIES, task[:80])
                 try:
                     plan = self.planner.repair(task, self._collect_failures(exec_result))
                 except ValueError:

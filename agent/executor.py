@@ -1,6 +1,9 @@
 import re
 import yaml
 from pathlib import Path
+from agent.logger import get_logger
+
+_log = get_logger(__name__)
 
 
 class Executor:
@@ -143,25 +146,39 @@ class Executor:
 
         if verdict == "block":
             base["error"] = f"命令被安全策略阻止: {params.get('command', params.get('path', str(params)))}"
+            _log.warning("BLOCKED step=%s tool=%s cmd=%s", step_id, tool_name,
+                         params.get('command', params.get('path', '?'))[:120])
             return base
 
         if verdict == "confirm" and not auto_confirm:
-            # 提取可读的命令描述给用户确认
             confirm_msg = self._describe_step(tool_name, action, params)
             if not self.confirm_callback(confirm_msg):
                 base["error"] = "用户取消执行"
                 base["verdict"] = "skip"
+                _log.info("SKIPPED step=%s (用户取消)", step_id)
                 return base
 
         # ── 执行 ──
+        # 审计：记录 shell 命令执行
+        if tool_name == "shell":
+            cmd = params.get("command", "?")
+            _log.info("EXEC step=%s cmd=%s", step_id, cmd[:200])
+
         try:
             result = tool.execute(**params)
             base["success"] = result.get("success", False)
             base["result"] = result.get("result")
             base["error"] = result.get("error")
+
+            if base["success"]:
+                _log.info("OK step=%s tool=%s", step_id, tool_name)
+            else:
+                _log.error("FAIL step=%s tool=%s error=%s", step_id, tool_name,
+                           (base["error"] or "")[:120])
         except Exception as e:
             base["success"] = False
             base["error"] = str(e)
+            _log.exception("EXCEPTION step=%s tool=%s", step_id, tool_name)
 
         return base
 
