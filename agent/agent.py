@@ -14,6 +14,7 @@ from tools.shell import ShellTool
 from tools.task_inbox import TaskInboxTool
 from tools.obsidian import ObsidianTool
 from tools.web_search import WebSearchTool
+from tools.file import FileTool
 
 
 class PersonalAgent:
@@ -59,6 +60,7 @@ class PersonalAgent:
         # 初始化工具注册表（Phase 3：供 Planner 了解可用工具）
         self.tools_registry = {
             "shell": ShellTool(),
+            "file": FileTool(),
             "obsidian": ObsidianTool(),
             "task_inbox": TaskInboxTool(),
             "web_search": WebSearchTool(),
