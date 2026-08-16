@@ -190,7 +190,8 @@ uv run pytest tests/ -v
 | P0 | 安全匹配器正则化 | 解决子串匹配误报与绕过 |
 | P1 | Git 工具 | 结构化 git status/diff/commit |
 | P1 | 对话历史截断 | 防止长会话撑爆上下文窗口 |
-| P2 | 结构化输出（Pydantic schema） | 替代手工 JSON 校验 |
+| P1 | 结构化输出（Pydantic schema） | 替代手工 JSON 校验 |
+| P1 | 代码运行工具 | 结构化执行代码，traceback 驱动自动修复 |
 | P2 | RAG 长期记忆（Phase 11） | 向量数据库跨项目问答 |
 | P3 | Browser Agent（Phase 8） | 浏览器交互，超出搜索的网页操作 |
 

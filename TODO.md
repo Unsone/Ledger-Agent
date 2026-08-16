@@ -33,7 +33,22 @@
 - **方案**：用 Pydantic model 定义 Plan/Step，LLM 结构化输出模式（DeepSeek 支持 JSON mode）
 - **影响**：更可靠的格式保证、类型安全
 
+### 6. 代码运行工具
+- **问题**：现在跑代码只能靠 shell 的 `python xxx.py`，stdout 是纯文本；报错时无法结构化分析、无隔离、无法跑片段
+- **方案**：新增 `tools/python_runner.py`：
+  - 执行代码片段/脚本，捕获 stdout/stderr/退出码/耗时
+  - 超时与输出上限控制
+  - 失败时把 traceback 结构化返回，供 Planner 直接据此修复（与自检回路联动）
+- **核心场景**：`/run 跑一下 tests/test_tools.py 看哪个用例挂了` → 拿到结构化失败列表 → 自动定位 → file 工具修复 → 再跑
+- **影响**：补齐"开发闭环"最后一环（改 → 跑 → 看错 → 再改）
+
 ## P2 — 常规改进
+
+### 7. Step Chaining 引号安全
+- **问题**：`{step_N_result}` 替换进 Python 字符串时，若结果含引号/三引号会破坏语法
+- **方案**：替换前做转义，或改用临时文件传递大数据
+
+### 8. Inbox 自动接入（DESIGN Phase 10）
 
 ### 6. Step Chaining 引号安全
 - **问题**：`{step_N_result}` 替换进 Python 字符串时，若结果含引号/三引号会破坏语法
@@ -43,25 +58,25 @@
 - **问题**：`task_inbox` 工具存在但无 CLI 命令、无自动消费
 - **方案**：加 `/inbox` 命令；启动时检测 Inbox 非空提示处理
 
-### 8. RAG 长期记忆（DESIGN Phase 11）
+### 9. RAG 长期记忆（DESIGN Phase 11）
 - 向量化 memory 与 Daily 笔记，支持"某项目做到哪一步了"跨会话问答
 - 技术选型：ChromaDB（本地零配置）
 
-### 9. Browser Agent（DESIGN Phase 8）
+### 10. Browser Agent（DESIGN Phase 8）
 - 超出搜索的浏览器操作：表单填写、页面交互、截图
 - 技术选型：Playwright
 
 ## P3 — 打磨
 
-### 10. 硬编码值迁移到 config.yaml
+### 11. 硬编码值迁移到 config.yaml
 - `MAX_RETRIES=3`、`MAX_VERIFY_ROUNDS=2`、shell timeout=120、输出截断 4000/1500/120 等散落代码中
 
-### 11. llm.py 健壮性
+### 12. llm.py 健壮性
 - API key 缺失时友好报错（现在是 KeyError 堆栈）
 - `response.choices[0].message.content` 的 None 检查
 - 多 provider 配置化（base_url / key 名可配，现在是 DeepSeek 硬编码）
 
-### 12. Memory 自动提炼
+### 13. Memory 自动提炼
 - DESIGN.md 未决问题：从 Daily 日记自动更新 projects.md 的"最近进展"字段
 - 需要先明确与用户手改内容的冲突处理策略
 
