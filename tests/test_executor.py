@@ -25,7 +25,7 @@ class TestSafetyVerdicts:
     @pytest.fixture
     def executor(self, sample_safety_config):
         return Executor(
-            tools={"shell": ShellTool()},
+            tools={"shell": ShellTool(), "git": MockTool()},
             safety_config_path=sample_safety_config,
             stop_on_failure=True,
         )
@@ -73,6 +73,20 @@ class TestSafetyVerdicts:
                 "params": {"command": "echo some-high-risk-cmd"}, "risk": "high"}
         r = executor.execute_step(step, auto_confirm=True)
         assert r["verdict"] == "confirm"
+
+    def test_git_push_confirm_via_tool_params(self, executor):
+        """git 工具的 push action 应命中 confirm_patterns（非 shell 工具安全检查）。"""
+        step = {"id": 1, "action": "推送", "tool": "git",
+                "params": {"action": "push"}, "risk": "medium"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert r["verdict"] == "confirm"
+
+    def test_git_status_allow(self, executor):
+        """git 工具的 status 只读操作应放行。"""
+        step = {"id": 1, "action": "查看状态", "tool": "git",
+                "params": {"action": "status"}, "risk": "low"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert r["verdict"] == "allow"
 
 
 class TestStepExecution:

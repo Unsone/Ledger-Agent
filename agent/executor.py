@@ -195,17 +195,22 @@ class Executor:
         Returns:
             "block" | "confirm" | "allow"
         """
-        # 只对 shell 工具做命令模式匹配
-        command = params.get("command", "")
+        # 构建安全检查字符串：
+        # shell → 命令原文；其他工具 → "tool_name 参数值"（如 "git push"）
+        if tool_name == "shell":
+            check_text = params.get("command", "")
+        else:
+            str_params = " ".join(str(v) for v in params.values() if isinstance(v, str))
+            check_text = f"{tool_name} {str_params}".strip()
 
         # 1. 检查 blocked_patterns（最高优先级）
         for pattern in self.safety.get("blocked_patterns", []):
-            if pattern in command:
+            if pattern in check_text:
                 return "block"
 
         # 2. 检查 confirm_patterns
         for pattern in self.safety.get("confirm_patterns", []):
-            if pattern in command:
+            if pattern in check_text:
                 return "confirm"
 
         # 3. Planner 标注的 high risk → 升级为 confirm

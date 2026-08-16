@@ -15,6 +15,7 @@ from tools.task_inbox import TaskInboxTool
 from tools.obsidian import ObsidianTool
 from tools.web_search import WebSearchTool
 from tools.file import FileTool
+from tools.git import GitTool
 
 
 class PersonalAgent:
@@ -61,6 +62,7 @@ class PersonalAgent:
         self.tools_registry = {
             "shell": ShellTool(),
             "file": FileTool(),
+            "git": GitTool(repo=str(Path(__file__).parent.parent)),
             "obsidian": ObsidianTool(),
             "task_inbox": TaskInboxTool(),
             "web_search": WebSearchTool(),
