@@ -9,6 +9,12 @@ class TaskInboxTool(Tool):
     name = "task_inbox"
     description = "读取 obsidian/Inbox.md 中手动粘贴的任务，读取后可归档清空"
 
+    params_schema = {
+        "execute": [
+            {"name": "archive", "required": False, "desc": "True 时读取后归档并清空 Inbox"},
+        ],
+    }
+
     def __init__(self, inbox_path: str = None):
         if inbox_path is None:
             inbox_path = Path(__file__).parent.parent / "obsidian" / "Inbox.md"

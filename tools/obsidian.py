@@ -13,6 +13,30 @@ class ObsidianTool(Tool):
         "append(追加内容), list(列出目录), search(搜索内容), daily(写入今日日记)"
     )
 
+    params_schema = {
+        "read": [
+            {"name": "path", "required": True, "desc": "笔记路径（vault 内相对路径）"},
+        ],
+        "write": [
+            {"name": "path", "required": True, "desc": "笔记路径"},
+            {"name": "content", "required": True, "desc": "markdown 内容"},
+        ],
+        "append": [
+            {"name": "path", "required": True, "desc": "笔记路径"},
+            {"name": "content", "required": True, "desc": "要追加的内容"},
+        ],
+        "list": [
+            {"name": "path", "required": False, "desc": "目录路径，空为 vault 根"},
+        ],
+        "search": [
+            {"name": "query", "required": True, "desc": "搜索关键词"},
+            {"name": "path", "required": False, "desc": "限定搜索目录"},
+        ],
+        "daily": [
+            {"name": "content", "required": True, "desc": "要写入今日日记的内容"},
+        ],
+    }
+
     def __init__(self, vault_path: str = None):
         if vault_path is None:
             vault_path = Path(__file__).parent.parent / "obsidian"

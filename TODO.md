@@ -5,10 +5,9 @@
 
 ## P0 — 根治病症
 
-### 1. 工具参数 schema 化
-- **问题**：Planner（LLM）发明不存在的参数名（`filepath` vs `path`、`operation` vs `action`），目前靠各工具入口做别名兜底，治标不治本
-- **方案**：在 `tools/base.py` 的 Tool 基类声明 `params_schema`（JSON Schema），Planner prompt 自动注入精确参数定义，Executor 执行前校验
-- **影响**：消灭参数名错误、减少一次 repair 往返
+### 1. ~~工具参数 schema 化~~ ✅ 已完成（Update 009）
+- ~~params_schema 双保险：Planner prompt 注入精确参数定义 + Executor 执行前必填校验~~
+- ~~124 测试全量通过，别名兼容保留为兜底~~
 
 ### 2. 安全匹配器正则化
 - **问题**：`safety.yaml` 用子串 + 大小写敏感匹配：

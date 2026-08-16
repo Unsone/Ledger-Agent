@@ -140,6 +140,12 @@ class Executor:
             base["error"] = f"未知工具: {tool_name}"
             return base
 
+        # ── 参数校验（params_schema）──
+        schema_error = self._validate_params(tool, params)
+        if schema_error:
+            base["error"] = schema_error
+            return base
+
         # ── 安全检查 ──
         verdict = self._check_safety(tool_name, params, risk)
         base["verdict"] = verdict
@@ -181,6 +187,43 @@ class Executor:
             _log.exception("EXCEPTION step=%s tool=%s", step_id, tool_name)
 
         return base
+
+    # ── 参数校验 ──────────────────────────────────────────
+
+    @staticmethod
+    def _validate_params(tool, params: dict) -> str | None:
+        """依据工具的 params_schema 校验必填参数。
+
+        Returns:
+            错误信息字符串；参数合法时返回 None。
+        """
+        schema = getattr(tool, "params_schema", None)
+        if not schema:
+            return None  # 未声明 schema 的工具跳过校验
+
+        # 找到当前 action 的参数定义
+        # 有 action 参数的工具按 action 查表；无 action 的（如 shell）用 "execute"
+        action = params.get("action") or params.get("operation") or "execute"
+        spec = schema.get(action)
+        if spec is None:
+            # action 名不在 schema 中 → 报错并列出合法 action
+            valid_actions = ", ".join(schema.keys())
+            return f"未知的 action: '{action}'。支持: {valid_actions}"
+
+        # 检查必填参数
+        missing = []
+        for p in spec:
+            if p.get("required") and not params.get(p["name"]):
+                missing.append(p["name"])
+
+        if missing:
+            correct_names = ", ".join(m["name"] for m in spec)
+            return (
+                f"缺少必填参数: {', '.join(missing)}。"
+                f"该操作的正确参数名为: {correct_names}"
+            )
+
+        return None
 
     # ── 安全检查 ──────────────────────────────────────────
 

@@ -167,13 +167,18 @@ clear            清空对话历史（保留 memory 上下文）
 - JSON 解析失败自动带错误信息重试（最多 2 次）
 - LLM 调用异常（网络/API）同样纳入重试
 
-### 参数命名容错
+### 工具参数 Schema
 
-LLM 生成的参数名可能与工具接口不一致（如 `filepath` vs `path`、`operation` vs `action`），各工具在入口做别名兼容。
+每个工具在 `params_schema` 中声明各 action 的精确参数（名称/必填/说明），形成双保险：
+
+1. **规划前**：Planner 的 prompt 自动注入全部参数定义，LLM 直接生成正确参数名
+2. **执行前**：Executor 校验必填参数，缺失时报错并提示正确参数名（触发自动修复回路）
+
+此机制从根源上解决 LLM 发明参数名的问题（如 `filepath` vs `path`）；各工具的别名兼容仍保留作为兜底。
 
 ### 测试
 
-117 个 pytest 用例，全部可在无 API key、无网络环境下运行：
+124 个 pytest 用例，全部可在无 API key、无网络环境下运行：
 
 ```bash
 uv run pytest tests/ -v
@@ -190,7 +195,6 @@ uv run pytest tests/ -v
 
 | 优先级 | 项目 | 说明 |
 |---|---|---|
-| P0 | 工具参数 schema 化 | 根治 LLM 发明参数名问题 |
 | P0 | 安全匹配器正则化 | 解决子串匹配误报与绕过 |
 | P1 | 对话历史截断 | 防止长会话撑爆上下文窗口 |
 | P1 | 结构化输出（Pydantic schema） | 替代手工 JSON 校验 |

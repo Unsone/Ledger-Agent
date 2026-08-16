@@ -9,6 +9,13 @@ class ShellTool(Tool):
     name = "shell"
     description = "执行命令行指令（Windows/Linux），受 config/safety.yaml 规则约束"
 
+    params_schema = {
+        "execute": [
+            {"name": "command", "required": True, "desc": "要执行的命令"},
+            {"name": "cwd", "required": False, "desc": "工作目录（可选）"},
+        ],
+    }
+
     # 输出超过此长度时截断，避免 LLM 上下文溢出
     MAX_OUTPUT_LENGTH = 4000
 

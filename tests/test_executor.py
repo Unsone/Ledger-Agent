@@ -212,3 +212,64 @@ class TestStepChaining:
         r2 = result["results"][1]
         # 占位符不会被替换（因为步骤1失败，无结果）
         assert "{step_1_result}" in r2.get("action", "") or True  # action 中可能被保留
+
+
+class TestParamSchemaValidation:
+    """params_schema 校验：必填参数缺失、未知 action。"""
+
+    @pytest.fixture
+    def executor(self):
+        from tools.file import FileTool
+        from tools.git import GitTool
+        return Executor(tools={"file": FileTool(), "git": MockTool(), "shell": ShellTool()})
+
+    def test_missing_required_param(self, executor):
+        """缺少必填参数应失败并提示正确参数名。"""
+        step = {"id": 1, "action": "写文件但没 content", "tool": "file",
+                "params": {"action": "write", "path": "D:/x.txt"}, "risk": "low"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert not r["success"]
+        assert "缺少必填参数" in r["error"]
+        assert "content" in r["error"]
+
+    def test_wrong_param_name_detected(self, executor):
+        """Planner 用了错误参数名（filepath 而非 path）应被识别为缺参。"""
+        step = {"id": 1, "action": "读取", "tool": "file",
+                "params": {"action": "read", "filepath": "D:/x.txt"}, "risk": "low"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert not r["success"]
+        assert "path" in r["error"]  # 错误信息中包含正确参数名
+
+    def test_unknown_action(self, executor):
+        """未知 action 应列出合法 action。"""
+        step = {"id": 1, "action": "无效操作", "tool": "file",
+                "params": {"action": "delete", "path": "x"}, "risk": "low"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert not r["success"]
+        assert "未知的 action" in r["error"]
+        assert "write" in r["error"]  # 列出合法值
+
+    def test_valid_params_pass(self, executor, tmp_path):
+        """参数合法时应正常执行。"""
+        target = tmp_path / "ok.txt"
+        step = {"id": 1, "action": "创建文件", "tool": "file",
+                "params": {"action": "write", "path": str(target), "content": "hi"},
+                "risk": "low"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert r["success"]
+
+    def test_operation_alias_still_works(self, executor, tmp_path):
+        """operation 别名（obsidian 兼容）仍应通过校验。"""
+        from tools.obsidian import ObsidianTool
+        ex2 = Executor(tools={"obsidian": ObsidianTool(vault_path=str(tmp_path))})
+        step = {"id": 1, "action": "列表", "tool": "obsidian",
+                "params": {"operation": "list"}, "risk": "low"}
+        r = ex2.execute_step(step, auto_confirm=True)
+        assert r["success"]
+
+    def test_shell_no_action_uses_execute_schema(self, executor):
+        """shell 无 action 参数，走 execute schema。"""
+        step = {"id": 1, "action": "echo", "tool": "shell",
+                "params": {"command": "echo schema-ok"}, "risk": "low"}
+        r = executor.execute_step(step, auto_confirm=True)
+        assert r["success"]

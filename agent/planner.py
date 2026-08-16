@@ -130,13 +130,25 @@ class Planner:
         return "\n\n".join(parts)
 
     def _describe_tools(self) -> str:
-        """根据 tools_registry 生成工具列表描述。"""
+        """根据 tools_registry 生成工具列表描述（含每个 action 的精确参数）。"""
         if not self.tools_registry:
             return "（暂无可用工具，所有步骤的 tool 请填 \"none\"）"
 
         lines = []
         for name, tool in self.tools_registry.items():
             lines.append(f"- **{name}**: {tool.description}")
+            # 附上 params_schema，让 LLM 用精确的参数名
+            schema = getattr(tool, "params_schema", None)
+            if schema:
+                for action, params in schema.items():
+                    if not params:
+                        lines.append(f"    - {action}: 无参数")
+                        continue
+                    specs = []
+                    for p in params:
+                        req = "必填" if p.get("required") else "可选"
+                        specs.append(f"{p['name']}({req}): {p.get('desc', '')}")
+                    lines.append(f"    - {action}: " + "; ".join(specs))
         return "\n".join(lines)
 
     @staticmethod

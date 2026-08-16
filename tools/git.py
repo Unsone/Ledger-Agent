@@ -16,6 +16,24 @@ class GitTool(Tool):
         "branch(当前分支), add(暂存), commit(提交), push(推送)"
     )
 
+    params_schema = {
+        "status": [],
+        "diff": [
+            {"name": "staged", "required": False, "desc": "True 时查看已暂存改动"},
+        ],
+        "log": [
+            {"name": "count", "required": False, "desc": "显示最近 N 次提交"},
+        ],
+        "branch": [],
+        "add": [
+            {"name": "files", "required": False, "desc": "要暂存的文件，默认全部"},
+        ],
+        "commit": [
+            {"name": "message", "required": True, "desc": "提交信息"},
+        ],
+        "push": [],
+    }
+
     # 输出截断上限
     MAX_OUTPUT_LENGTH = 4000
 

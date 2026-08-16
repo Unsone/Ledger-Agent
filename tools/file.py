@@ -15,6 +15,35 @@ class FileTool(Tool):
         "edit(查找替换), append(追加), insert_after(行后插入), replace_line(替换某行)"
     )
 
+    params_schema = {
+        "read": [
+            {"name": "path", "required": True, "desc": "文件路径"},
+        ],
+        "write": [
+            {"name": "path", "required": True, "desc": "文件路径"},
+            {"name": "content", "required": True, "desc": "完整文件内容"},
+        ],
+        "edit": [
+            {"name": "path", "required": True, "desc": "文件路径"},
+            {"name": "old_text", "required": True, "desc": "要查找的原文（必须唯一）"},
+            {"name": "new_text", "required": True, "desc": "替换后的文本"},
+        ],
+        "append": [
+            {"name": "path", "required": True, "desc": "文件路径"},
+            {"name": "content", "required": True, "desc": "要追加的内容"},
+        ],
+        "insert_after": [
+            {"name": "path", "required": True, "desc": "文件路径"},
+            {"name": "line_number", "required": True, "desc": "行号（从1开始）"},
+            {"name": "content", "required": True, "desc": "要插入的内容"},
+        ],
+        "replace_line": [
+            {"name": "path", "required": True, "desc": "文件路径"},
+            {"name": "line_number", "required": True, "desc": "行号（从1开始）"},
+            {"name": "new_content", "required": True, "desc": "新的行内容"},
+        ],
+    }
+
     # 读取文件时最多返回的行数
     MAX_READ_LINES = 300
 

@@ -21,6 +21,22 @@ class TestToolBase:
         assert ShellTool.name == "shell"
         assert "shell" in ShellTool.description.lower() or "命令" in ShellTool.description
 
+    def test_all_tools_declare_params_schema(self):
+        """所有已注册工具都应声明 params_schema（含必填参数标记）。"""
+        from tools.file import FileTool
+        from tools.git import GitTool
+        from tools.python_runner import PythonRunnerTool
+        from tools.web_search import WebSearchTool
+
+        tools = [ShellTool(), FileTool(), GitTool(), PythonRunnerTool(),
+                 ObsidianTool(), WebSearchTool(), TaskInboxTool()]
+        for t in tools:
+            assert t.params_schema, f"{t.name} 缺少 params_schema"
+            for action, params in t.params_schema.items():
+                for p in params:
+                    assert "name" in p and "required" in p, \
+                        f"{t.name}.{action} 的参数定义缺少 name/required 字段"
+
 
 class TestShellTool:
     """ShellTool 命令行执行测试。"""

@@ -9,6 +9,16 @@ class WebSearchTool(Tool):
         "搜索网页或获取网页内容。支持 search(搜索关键词) 和 fetch(获取URL内容)"
     )
 
+    params_schema = {
+        "search": [
+            {"name": "query", "required": True, "desc": "搜索关键词"},
+            {"name": "max_results", "required": False, "desc": "结果数量，默认 5 最多 10"},
+        ],
+        "fetch": [
+            {"name": "url", "required": True, "desc": "网页 URL"},
+        ],
+    }
+
     def execute(self, action: str = "search", query: str = "", url: str = "",
                 max_results: int = 5, **kwargs) -> dict:
         """执行网页搜索或内容获取。

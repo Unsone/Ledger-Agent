@@ -22,6 +22,15 @@ class PythonRunnerTool(Tool):
         "返回 stdout/stderr/退出码/耗时。用于运行测试、验证脚本、执行代码片段"
     )
 
+    params_schema = {
+        "run": [
+            {"name": "code", "required": False, "desc": "内联代码字符串（与 script 二选一）"},
+            {"name": "script", "required": False, "desc": "脚本文件路径（与 code 二选一）"},
+            {"name": "cwd", "required": False, "desc": "工作目录"},
+            {"name": "timeout", "required": False, "desc": "超时秒数，默认 60，最大 300"},
+        ],
+    }
+
     # 资源限制（"资源沙箱"：防死循环/输出洪泛，不防恶意代码）
     DEFAULT_TIMEOUT = 60   # 秒
     MAX_TIMEOUT = 300      # 秒
