@@ -13,7 +13,7 @@
    → Memory 提供用户画像与项目状态上下文
    → Planner 将自然语言拆解为结构化步骤 (JSON)
    → Executor 逐步骤执行，执行前过 safety.yaml 安全检查
-   → Tools 实际执行 (shell / file / obsidian / web_search / task_inbox)
+   → Tools 实际执行 (shell / file / git / python_runner / obsidian / web_search / task_inbox)
    → 结果自检：不满足用户意图时自动补救重规划 (最多 2 轮)
    → 执行记录写入 obsidian/Daily/{date}.md
 ```
@@ -21,8 +21,9 @@
 已实现的关键特性：
 
 - **双层级纠错**：执行层（命令失败 → 自动修复重试，最多 3 次）+ 语义层（结果不足以回答问题 → 自动生成补救任务重新规划，最多 2 轮）
+- **开发闭环自动化**：python_runner 执行代码捕获结构化 traceback → 自动定位错误 → file 工具精确修复 → 重新运行验证（改-跑-看错-再改全自动）
 - **步骤间数据传递**：后续步骤可用 `{step_N_result}` 占位符引用前序步骤的实际输出
-- **三态安全检查**：`block`（直接拒绝）/ `confirm`（需用户确认）/ `allow`，规则配置在 `config/safety.yaml`，与代码分离
+- **三态安全检查**：`block`（直接拒绝）/ `confirm`（需用户确认）/ `allow`，规则配置在 `config/safety.yaml`，与代码分离，覆盖 shell 与 git 等非 shell 工具
 - **Memory 快照**：用户画像与项目状态每次更新前自动存入 `memory/history/`，可回溯排查
 - **命令审计日志**：所有 shell 命令执行记录到 `logs/agent.log`，按天轮转
 
@@ -44,6 +45,8 @@ Personal-Agent/
 │   ├── base.py             # Tool 抽象接口：统一返回 {success, result, error}
 │   ├── shell.py            # 命令行执行（UTF-8 处理、$HOME 展开、输出截断）
 │   ├── file.py             # 文件读写与精确编辑（带行号 read、唯一匹配 edit）
+│   ├── git.py              # Git 版本控制（结构化 status/diff/log/add/commit/push）
+│   ├── python_runner.py    # Python 执行（子进程隔离、超时、结构化 traceback）
 │   ├── obsidian.py         # Obsidian vault 读写（含路径穿越防护）
 │   ├── web_search.py       # DuckDuckGo 搜索 + 网页内容抓取
 │   └── task_inbox.py       # 手动任务投喂（Inbox.md 读取与归档）
@@ -53,7 +56,7 @@ Personal-Agent/
 │   └── safety.yaml         # 危险命令规则（block/confirm 模式列表）
 ├── memory/                 # 用户画像、项目状态、历史快照
 ├── obsidian/               # vault：Daily/、Projects/、Knowledge/、Inbox.md
-├── tests/                  # 86 个 pytest 用例（无需 API key）
+├── tests/                  # 117 个 pytest 用例（无需 API key）
 └── logs/                   # 运行日志（不入库）
 ```
 
@@ -170,7 +173,7 @@ LLM 生成的参数名可能与工具接口不一致（如 `filepath` vs `path`�
 
 ### 测试
 
-86 个 pytest 用例，全部可在无 API key、无网络环境下运行：
+117 个 pytest 用例，全部可在无 API key、无网络环境下运行：
 
 ```bash
 uv run pytest tests/ -v
@@ -178,7 +181,8 @@ uv run pytest tests/ -v
 
 - LLM 调用通过 mock 注入
 - 文件操作用临时目录隔离
-- 覆盖安全三态、路径穿越回归、快照去重、CRLF 处理等关键边界
+- Git 测试使用临时 git 仓库
+- 覆盖安全三态、路径穿越回归、快照去重、CRLF 处理、超时与隔离等关键边界
 
 ---
 
@@ -188,10 +192,8 @@ uv run pytest tests/ -v
 |---|---|---|
 | P0 | 工具参数 schema 化 | 根治 LLM 发明参数名问题 |
 | P0 | 安全匹配器正则化 | 解决子串匹配误报与绕过 |
-| P1 | Git 工具 | 结构化 git status/diff/commit |
 | P1 | 对话历史截断 | 防止长会话撑爆上下文窗口 |
 | P1 | 结构化输出（Pydantic schema） | 替代手工 JSON 校验 |
-| P1 | 代码运行工具 | 结构化执行代码，traceback 驱动自动修复 |
 | P2 | RAG 长期记忆（Phase 11） | 向量数据库跨项目问答 |
 | P3 | Browser Agent（Phase 8） | 浏览器交互，超出搜索的网页操作 |
 

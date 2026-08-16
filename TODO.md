@@ -19,10 +19,8 @@
 
 ## P1 — 重要功能
 
-### 3. Git 工具（DESIGN Phase 9）
-- 结构化封装：`status()`、`diff()`、`log()`、`commit(message)`
-- 核心场景：`/run 看看改了什么，帮我提交` → 读 diff → LLM 生成 message → 提交
-- 比裸 shell 跑 git 的优势：结构化输出、自动生成 commit message、安全确认集成
+### 3. ~~Git 工具（DESIGN Phase 9）~~ ✅ 已完成（Update 006）
+- ~~结构化封装 status/diff/log/add/commit/push，安全层覆盖非 shell 工具~~
 
 ### 4. 对话历史截断
 - **问题**：`chat()` 的 messages 无限增长，长会话撑爆 LLM 上下文窗口
@@ -33,14 +31,9 @@
 - **方案**：用 Pydantic model 定义 Plan/Step，LLM 结构化输出模式（DeepSeek 支持 JSON mode）
 - **影响**：更可靠的格式保证、类型安全
 
-### 6. 代码运行工具
-- **问题**：现在跑代码只能靠 shell 的 `python xxx.py`，stdout 是纯文本；报错时无法结构化分析、无隔离、无法跑片段
-- **方案**：新增 `tools/python_runner.py`：
-  - 执行代码片段/脚本，捕获 stdout/stderr/退出码/耗时
-  - 超时与输出上限控制
-  - 失败时把 traceback 结构化返回，供 Planner 直接据此修复（与自检回路联动）
-- **核心场景**：`/run 跑一下 tests/test_tools.py 看哪个用例挂了` → 拿到结构化失败列表 → 自动定位 → file 工具修复 → 再跑
-- **影响**：补齐"开发闭环"最后一环（改 → 跑 → 看错 → 再改）
+### 6. ~~代码运行工具~~ ✅ 已完成（Update 007）
+- ~~tools/python_runner.py：子进程隔离 + 超时 + 输出上限 + 结构化 traceback~~
+- ~~开发闭环已验证：报错 → 自动修复 → 重跑 → 确认通过~~
 
 ## P2 — 常规改进
 

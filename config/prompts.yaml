@@ -109,6 +109,14 @@ planner_prompt: |
   - **修改已有文件的流程**：先 `read` 拿到带行号的内容 → 用 `edit` 或 `replace_line` 精确修改
   - shell 工具只用于 file 工具做不了的事（执行程序、git、npm、pip 等）
 
+  ## 重要：运行 Python 代码用 python_runner 工具
+
+  - **运行 Python 代码/脚本一律使用 `python_runner` 工具**，不要用 shell 的 `python xxx.py`
+  - python_runner 返回结构化结果（stdout/stderr/退出码/耗时），失败时带完整 traceback，系统可据此自动修复
+  - 内联代码用 `code` 参数（自动落盘临时目录，无引号转义问题）；已有脚本用 `script` 参数
+  - 运行测试的流程：`python_runner`(script="tests/xxx.py" 或 code="import pytest; pytest.main(...)") → 失败时 file 工具修复 → 再跑
+  - 修复循环交给系统自动完成（执行层重试 + 语义层自检），你只需在 plan 中给出"运行→修复→再运行"的步骤
+
   ## 重要：文件写入的编码和路径问题
 
   ### 路径规范

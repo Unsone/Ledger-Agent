@@ -16,6 +16,7 @@ from tools.obsidian import ObsidianTool
 from tools.web_search import WebSearchTool
 from tools.file import FileTool
 from tools.git import GitTool
+from tools.python_runner import PythonRunnerTool
 
 
 class PersonalAgent:
@@ -63,6 +64,7 @@ class PersonalAgent:
             "shell": ShellTool(),
             "file": FileTool(),
             "git": GitTool(repo=str(Path(__file__).parent.parent)),
+            "python_runner": PythonRunnerTool(),
             "obsidian": ObsidianTool(),
             "task_inbox": TaskInboxTool(),
             "web_search": WebSearchTool(),
