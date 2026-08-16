@@ -17,6 +17,9 @@ venv/
 memory/history/
 logs/
 
+# Agent runtime records (personal daily notes)
+obsidian/Daily/
+
 # Claude Code local settings
 .claude/
 
