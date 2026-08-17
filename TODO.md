@@ -32,6 +32,9 @@
 
 ## P2 — 常规改进
 
+### 外部笔记库配置（Update 014）
+- ✅ `notes.vault_path` 可将 Agent 连接到 Hexo `_posts` 等外部 Markdown 目录；笔记读写、Inbox、Daily 记录和 RAG 使用同一根目录
+
 ### 7. Step Chaining 引号安全
 - **问题**：`{step_N_result}` 替换进 Python 字符串时，若结果含引号/三引号会破坏语法
 - **方案**：替换前做转义，或改用临时文件传递大数据

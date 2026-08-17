@@ -1,6 +1,7 @@
 """PersonalAgent 普通对话历史管理测试（无需加载配置、RAG 或 API）。"""
 
 import pytest
+from pathlib import Path
 
 from agent.agent import PersonalAgent
 
@@ -76,3 +77,28 @@ def test_invalid_history_limit_is_rejected(value):
     agent = make_agent(max_history_turns=value)
     with pytest.raises(ValueError):
         agent._trim_history()
+
+
+def test_resolve_notes_path_uses_default_vault(tmp_path):
+    default_vault = tmp_path / "obsidian"
+    default_vault.mkdir()
+
+    resolved = PersonalAgent._resolve_notes_path("", tmp_path)
+
+    assert resolved == default_vault.resolve()
+
+
+def test_resolve_notes_path_accepts_external_relative_directory(tmp_path):
+    project_root = tmp_path / "agent"
+    external_vault = tmp_path / "hexo" / "source" / "_posts"
+    project_root.mkdir()
+    external_vault.mkdir(parents=True)
+
+    resolved = PersonalAgent._resolve_notes_path("../hexo/source/_posts", project_root)
+
+    assert resolved == external_vault.resolve()
+
+
+def test_resolve_notes_path_rejects_missing_directory(tmp_path):
+    with pytest.raises(FileNotFoundError, match="笔记目录不存在"):
+        PersonalAgent._resolve_notes_path("missing-notes", tmp_path)

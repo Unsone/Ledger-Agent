@@ -9,3 +9,13 @@ agent:
   max_steps: 10
   max_history_turns: 20  # 普通对话保留的最近轮次（system prompt 与 memory 始终保留）
   name: "PersonalAgent"
+
+# 笔记库根目录。留空时使用项目内的 obsidian/；可填绝对路径，或相对于项目根目录的路径。
+# Hexo 示例："D:/Projects/my-hexo/source/_posts"
+notes:
+  vault_path: ""
+
+# 笔记库根目录。留空时使用项目内的 obsidian/；可填绝对路径，或相对于项目根目录的路径。
+# Hexo 示例："D:/Projects/my-hexo/source/_posts"
+notes:
+  vault_path: ""

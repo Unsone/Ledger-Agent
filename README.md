@@ -15,7 +15,7 @@
    → Executor 逐步骤执行，执行前过 safety.yaml 安全检查
    → Tools 实际执行 (shell / file / git / python_runner / obsidian / web_search / task_inbox)
    → 结果自检：不满足用户意图时自动补救重规划 (最多 2 轮)
-   → 执行记录写入 obsidian/Daily/{date}.md
+   → 执行记录写入配置的笔记库 Daily/{date}.md
 ```
 
 已实现的关键特性：
@@ -58,7 +58,7 @@ Personal-Agent/
 │   ├── prompts.yaml        # 各模块 system prompt（版本化、可调优）
 │   └── safety.yaml         # 危险命令规则（block/confirm 模式列表）
 ├── memory/                 # 用户画像、项目状态、历史快照
-├── obsidian/               # vault：Daily/、Projects/、Knowledge/、Inbox.md
+├── obsidian/               # 默认笔记库：Daily/、Projects/、Knowledge/、Inbox.md
 ├── tests/                  # 117 个 pytest 用例（无需 API key）
 └── logs/                   # 运行日志（不入库）
 ```
@@ -130,10 +130,13 @@ uv sync
 # 2. 配置 API key
 cp .env.example .env        # 然后填入 DEEPSEEK_API_KEY
 
-# 3. （可选）填写用户画像
+# 3. （可选）连接外部笔记目录：编辑 config/config.yaml 中 notes.vault_path
+#    例如 Hexo：D:/Projects/my-hexo/source/_posts
+
+# 4. （可选）填写用户画像
 # 编辑 memory/profile.md 和 memory/projects.md
 
-# 4. 启动
+# 5. 启动
 uv run main.py
 ```
 
@@ -152,13 +155,24 @@ clear            清空对话历史（保留 memory 上下文）
 
 ### 长期记忆问答
 
-使用 `/ask` 查询 `memory/` 和 `obsidian/` 下的 Markdown 笔记。例如：
+使用 `/ask` 查询 `memory/` 和配置笔记库下的 Markdown 笔记。例如：
 
 ```text
 /ask Alpha 项目目前做到哪一步？
 ```
 
-首次查询会建立本地索引；之后仅处理新增、修改或删除的笔记。`obsidian/Inbox.md` 不会被索引，避免把临时待办当作长期知识。向量索引位于 `memory/vector_store/`，属于本地运行数据，不会提交到 Git。
+首次查询会建立本地索引；之后仅处理新增、修改或删除的笔记。笔记库根目录中的 `Inbox.md` 不会被索引，避免把临时待办当作长期知识。向量索引位于 `memory/vector_store/`，属于本地运行数据，不会提交到 Git。
+
+### 连接 Hexo 或外部笔记库
+
+在 `config/config.yaml` 填写 `notes.vault_path` 即可让 Agent 使用外部目录作为笔记库：
+
+```yaml
+notes:
+  vault_path: "D:/Projects/my-hexo/source/_posts"
+```
+
+路径可以是绝对路径，也可以是相对于本项目根目录的路径。填写后，`obsidian` 工具、`/ask`、`Inbox.md` 和自动执行记录都会使用该目录；工具调用时的笔记路径仍须相对于这个根目录，例如 `path: "2026-08-18-note.md"`。目录必须预先存在，留空则继续使用项目内的 `obsidian/`。
 
 ---
 

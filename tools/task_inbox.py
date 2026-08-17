@@ -4,10 +4,10 @@ from tools.base import Tool
 
 
 class TaskInboxTool(Tool):
-    """手动投喂入口：用户把消息/任务粘贴进 obsidian/Inbox.md，此工具读取并归档。"""
+    """手动投喂入口：用户把消息/任务粘贴进笔记库的 Inbox.md，此工具读取并归档。"""
 
     name = "task_inbox"
-    description = "读取 obsidian/Inbox.md 中手动粘贴的任务，读取后可归档清空"
+    description = "读取笔记库 Inbox.md 中手动粘贴的任务，读取后可归档清空"
 
     params_schema = {
         "execute": [

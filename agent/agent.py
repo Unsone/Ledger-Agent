@@ -62,12 +62,16 @@ class PersonalAgent:
         # 初始化 LLM
         self.llm = LLM(self.config)
 
-        # 初始化 RAG 长期记忆（Phase 11）：向量化 memory 与 obsidian
         project_root = Path(__file__).parent.parent
+        self.notes_path = self._resolve_notes_path(
+            self.config.get("notes", {}).get("vault_path", ""), project_root
+        )
+
+        # 初始化 RAG 长期记忆（Phase 11）：向量化 memory 与配置的笔记库
         self.rag = RAGStore(
             source_dirs=[
                 str(project_root / "memory"),
-                str(project_root / "obsidian"),
+                str(self.notes_path),
             ],
         )
 
@@ -77,8 +81,8 @@ class PersonalAgent:
             "file": FileTool(),
             "git": GitTool(repo=str(project_root)),
             "python_runner": PythonRunnerTool(),
-            "obsidian": ObsidianTool(),
-            "task_inbox": TaskInboxTool(),
+            "obsidian": ObsidianTool(vault_path=str(self.notes_path)),
+            "task_inbox": TaskInboxTool(inbox_path=str(self.notes_path / "Inbox.md")),
             "web_search": WebSearchTool(),
             "memory_search": MemorySearchTool(rag_store=self.rag),
         }
@@ -136,6 +140,31 @@ class PersonalAgent:
             raise ValueError("agent.max_history_turns 必须是大于 0 的整数")
         keep_messages = self.max_history_turns * 2 - (1 if pending_user else 0)
         self.messages = [self.messages[0], *self.messages[1:][-keep_messages:]]
+
+    @staticmethod
+    def _resolve_notes_path(vault_path: str, project_root: Path) -> Path:
+        """解析配置的笔记库根目录，并验证它是已有目录。
+
+        空配置继续使用项目内 ``obsidian/``；相对路径以项目根目录为基准，
+        绝对路径可用于连接外部的 Hexo ``source/_posts`` 等笔记目录。
+        """
+        if vault_path is None:
+            vault_path = ""
+        if not isinstance(vault_path, str):
+            raise ValueError("notes.vault_path 必须是字符串路径")
+
+        path = Path(vault_path).expanduser() if vault_path.strip() else project_root / "obsidian"
+        if not path.is_absolute():
+            path = project_root / path
+        path = path.resolve()
+
+        if not path.exists():
+            raise FileNotFoundError(
+                f"笔记目录不存在: {path}。请创建目录或修改 notes.vault_path。"
+            )
+        if not path.is_dir():
+            raise NotADirectoryError(f"notes.vault_path 不是目录: {path}")
+        return path
 
     # ── 任务规划（Phase 3）────────────────────────────────
 
