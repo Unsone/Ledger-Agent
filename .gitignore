@@ -15,6 +15,7 @@ venv/
 
 # Sensitive / personal data
 memory/history/
+memory/vector_store/
 logs/
 
 # Agent runtime records (personal daily notes)

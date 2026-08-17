@@ -26,6 +26,7 @@
 - **三态安全检查**：`block`（直接拒绝）/ `confirm`（需用户确认）/ `allow`，规则配置在 `config/safety.yaml`，与代码分离，覆盖 shell 与 git 等非 shell 工具
 - **Memory 快照**：用户画像与项目状态每次更新前自动存入 `memory/history/`，可回溯排查
 - **命令审计日志**：所有 shell 命令执行记录到 `logs/agent.log`，按天轮转
+- **RAG 长期记忆**：将 `memory/` 与 Obsidian 笔记增量向量化，支持跨会话检索与问答；模型不可用时自动降级为本地关键词检索
 
 ---
 
@@ -40,6 +41,7 @@ Personal-Agent/
 │   ├── planner.py          # 任务拆解：NL → {goal, steps[]}，含结构校验
 │   ├── executor.py         # 步骤执行：安全检查 → 工具调度 → 结果收集
 │   ├── memory.py           # 用户画像/项目状态读写，写前快照
+│   ├── rag.py              # 长期记忆：切块、增量索引、语义检索与问答
 │   └── logger.py           # 统一日志，按天轮转
 ├── tools/
 │   ├── base.py             # Tool 抽象接口：统一返回 {success, result, error}
@@ -49,7 +51,8 @@ Personal-Agent/
 │   ├── python_runner.py    # Python 执行（子进程隔离、超时、结构化 traceback）
 │   ├── obsidian.py         # Obsidian vault 读写（含路径穿越防护）
 │   ├── web_search.py       # DuckDuckGo 搜索 + 网页内容抓取
-│   └── task_inbox.py       # 手动任务投喂（Inbox.md 读取与归档）
+│   ├── task_inbox.py       # 手动任务投喂（Inbox.md 读取与归档）
+│   └── memory_search.py    # RAG 记忆库检索工具
 ├── config/
 │   ├── config.yaml         # LLM 参数、agent 参数
 │   ├── prompts.yaml        # 各模块 system prompt（版本化、可调优）
@@ -141,10 +144,21 @@ exit / quit      退出
 clear            清空对话历史（保留 memory 上下文）
 /memory          查看注入的记忆上下文
 /refresh         重新加载 memory 文件
+/ask <问题>       检索长期记忆并基于相关笔记回答
 /plan <任务>     仅规划，不执行
 /run <任务>      规划 + 执行 + 自检 + 记录
 /run -y <任务>   跳过所有确认
 ```
+
+### 长期记忆问答
+
+使用 `/ask` 查询 `memory/` 和 `obsidian/` 下的 Markdown 笔记。例如：
+
+```text
+/ask Alpha 项目目前做到哪一步？
+```
+
+首次查询会建立本地索引；之后仅处理新增、修改或删除的笔记。`obsidian/Inbox.md` 不会被索引，避免把临时待办当作长期知识。向量索引位于 `memory/vector_store/`，属于本地运行数据，不会提交到 Git。
 
 ---
 
@@ -198,7 +212,7 @@ uv run pytest tests/ -v
 |---|---|---|
 | P0 | 安全匹配器正则化 | 解决子串匹配误报与绕过 |
 | P1 | 对话历史截断 | 防止长会话撑爆上下文窗口 |
-| P2 | RAG 长期记忆（Phase 11） | 向量数据库跨项目问答 |
+| 已完成 | RAG 长期记忆（Phase 11） | 向量数据库跨项目问答（`/ask` 与 `memory_search`） |
 | P3 | Browser Agent（Phase 8） | 浏览器交互，超出搜索的网页操作 |
 
 ---

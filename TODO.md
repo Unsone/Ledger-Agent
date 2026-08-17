@@ -49,9 +49,9 @@
 - **问题**：`task_inbox` 工具存在但无 CLI 命令、无自动消费
 - **方案**：加 `/inbox` 命令；启动时检测 Inbox 非空提示处理
 
-### 9. RAG 长期记忆（DESIGN Phase 11）
-- 向量化 memory 与 Daily 笔记，支持"某项目做到哪一步了"跨会话问答
-- 技术选型：ChromaDB（本地零配置）
+### 9. ~~RAG 长期记忆（DESIGN Phase 11）~~ ✅ 已完成（Update 011）
+- ~~向量化 memory 与 Obsidian 笔记，支持"某项目做到哪一步了"跨会话问答~~
+- ~~ChromaDB 本地持久化 + FastEmbed 中文向量 + 离线关键词降级；提供 `/ask` 与 `memory_search`~~
 
 ### 10. Browser Agent（DESIGN Phase 8）
 - 超出搜索的浏览器操作：表单填写、页面交互、截图

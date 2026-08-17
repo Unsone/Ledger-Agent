@@ -17,6 +17,8 @@ from tools.web_search import WebSearchTool
 from tools.file import FileTool
 from tools.git import GitTool
 from tools.python_runner import PythonRunnerTool
+from tools.memory_search import MemorySearchTool
+from agent.rag import RAGStore
 
 
 class PersonalAgent:
@@ -59,15 +61,25 @@ class PersonalAgent:
         # 初始化 LLM
         self.llm = LLM(self.config)
 
+        # 初始化 RAG 长期记忆（Phase 11）：向量化 memory 与 obsidian
+        project_root = Path(__file__).parent.parent
+        self.rag = RAGStore(
+            source_dirs=[
+                str(project_root / "memory"),
+                str(project_root / "obsidian"),
+            ],
+        )
+
         # 初始化工具注册表（Phase 3：供 Planner 了解可用工具）
         self.tools_registry = {
             "shell": ShellTool(),
             "file": FileTool(),
-            "git": GitTool(repo=str(Path(__file__).parent.parent)),
+            "git": GitTool(repo=str(project_root)),
             "python_runner": PythonRunnerTool(),
             "obsidian": ObsidianTool(),
             "task_inbox": TaskInboxTool(),
             "web_search": WebSearchTool(),
+            "memory_search": MemorySearchTool(rag_store=self.rag),
         }
 
         # 初始化 Planner（Phase 3）
@@ -137,7 +149,7 @@ class PersonalAgent:
         """启动 CLI 交互循环。"""
         agent_name = self.config.get("agent", {}).get("name", "PersonalAgent")
         print(f"[OK] {agent_name} 启动成功！")
-        print("命令: exit | clear | /memory | /refresh | /plan <任务> | /run <任务> | /run -y <任务>")
+        print("命令: exit | clear | /memory | /refresh | /plan <任务> | /run <任务> | /run -y <任务> | /ask <问题>")
         print()
 
         while True:
@@ -180,6 +192,15 @@ class PersonalAgent:
                         print("\n用法: /plan <任务描述>\n")
                         continue
                     self._handle_plan(task)
+                    continue
+
+                # Phase 11: RAG 长期记忆问答
+                if user_input.startswith("/ask"):
+                    question = user_input[len("/ask"):].strip()
+                    if not question:
+                        print("\n用法: /ask <问题>\n")
+                        continue
+                    self._handle_ask(question)
                     continue
 
                 # Phase 7: 任务执行指令（规划 + 执行 + 记录）
@@ -239,6 +260,19 @@ class PersonalAgent:
             self._print_plan(plan)
         except ValueError as e:
             print(f"[规划失败] {e}\n")
+
+    def _handle_ask(self, question: str):
+        """处理 /ask 命令：RAG 检索记忆库 + LLM 生成答案。"""
+        print(f"\n[检索记忆中...] {question}\n")
+        try:
+            # 增量索引（检测新文件/变更）
+            stats = self.rag.index()
+            if stats["indexed"] > 0:
+                print(f"[索引更新] 新增/更新 {stats['indexed']} 个文件\n")
+            answer = self.rag.answer(question, self.llm)
+            print(f"{answer}\n")
+        except Exception as e:
+            print(f"[检索失败] {e}\n")
 
     @staticmethod
     def _print_plan(plan: dict):
