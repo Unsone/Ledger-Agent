@@ -51,7 +51,17 @@ class PersonalAgent:
             raise FileNotFoundError(f"Prompt 文件不存在: {prompts_path}")
 
         with open(config_path, "r", encoding="utf-8") as f:
-            self.config = yaml.safe_load(f)
+            self.config = yaml.safe_load(f) or {}
+
+        # config.local.yaml 是本机私有覆盖配置（例如外部笔记库的绝对路径），
+        # 被 .gitignore 忽略，不会随开源仓库提交。
+        local_config_path = config_dir / "config.local.yaml"
+        if local_config_path.exists():
+            with open(local_config_path, "r", encoding="utf-8") as f:
+                local_config = yaml.safe_load(f) or {}
+            if not isinstance(local_config, dict):
+                raise ValueError("config.local.yaml 的根节点必须是映射对象")
+            self.config = self._merge_config(self.config, local_config)
 
         with open(prompts_path, "r", encoding="utf-8") as f:
             self.prompts = yaml.safe_load(f)
@@ -165,6 +175,17 @@ class PersonalAgent:
         if not path.is_dir():
             raise NotADirectoryError(f"notes.vault_path 不是目录: {path}")
         return path
+
+    @staticmethod
+    def _merge_config(base: dict, overrides: dict) -> dict:
+        """递归合并本机配置；覆盖项只替换同名的叶子字段。"""
+        merged = dict(base)
+        for key, value in overrides.items():
+            if isinstance(merged.get(key), dict) and isinstance(value, dict):
+                merged[key] = PersonalAgent._merge_config(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
 
     # ── 任务规划（Phase 3）────────────────────────────────
 

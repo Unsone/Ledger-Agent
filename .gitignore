@@ -8,6 +8,7 @@ wheels/
 
 # Secrets & environment
 .env
+config/config.local.yaml
 
 # Virtual environments
 .venv

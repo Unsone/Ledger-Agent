@@ -102,3 +102,22 @@ def test_resolve_notes_path_accepts_external_relative_directory(tmp_path):
 def test_resolve_notes_path_rejects_missing_directory(tmp_path):
     with pytest.raises(FileNotFoundError, match="笔记目录不存在"):
         PersonalAgent._resolve_notes_path("missing-notes", tmp_path)
+
+
+def test_local_config_deeply_overrides_only_specified_fields():
+    base = {
+        "llm": {"model": "base-model", "temperature": 0.3},
+        "notes": {"vault_path": ""},
+    }
+    local = {
+        "llm": {"temperature": 0.1},
+        "notes": {"vault_path": "D:/hexo/source/_posts"},
+    }
+
+    merged = PersonalAgent._merge_config(base, local)
+
+    assert merged == {
+        "llm": {"model": "base-model", "temperature": 0.1},
+        "notes": {"vault_path": "D:/hexo/source/_posts"},
+    }
+    assert base["llm"]["temperature"] == 0.3

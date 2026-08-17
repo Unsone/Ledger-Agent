@@ -130,7 +130,7 @@ uv sync
 # 2. 配置 API key
 cp .env.example .env        # 然后填入 DEEPSEEK_API_KEY
 
-# 3. （可选）连接外部笔记目录：编辑 config/config.yaml 中 notes.vault_path
+# 3. （可选）连接外部笔记目录：编辑 config/config.local.yaml 中 notes.vault_path
 #    例如 Hexo：D:/Projects/my-hexo/source/_posts
 
 # 4. （可选）填写用户画像
@@ -165,7 +165,7 @@ clear            清空对话历史（保留 memory 上下文）
 
 ### 连接 Hexo 或外部笔记库
 
-在 `config/config.yaml` 填写 `notes.vault_path` 即可让 Agent 使用外部目录作为笔记库：
+在 `config/config.local.yaml` 填写 `notes.vault_path` 即可让 Agent 使用外部目录作为笔记库：
 
 ```yaml
 notes:
@@ -173,6 +173,8 @@ notes:
 ```
 
 路径可以是绝对路径，也可以是相对于本项目根目录的路径。填写后，`obsidian` 工具、`/ask`、`Inbox.md` 和自动执行记录都会使用该目录；工具调用时的笔记路径仍须相对于这个根目录，例如 `path: "2026-08-18-note.md"`。目录必须预先存在，留空则继续使用项目内的 `obsidian/`。
+
+`config.local.yaml` 会在启动时覆盖同名的 `config.yaml` 字段，并已被 Git 忽略；请将本机绝对路径、私有服务地址等个人配置放在这里，不要写入公开的 `config.yaml`。
 
 ---
 
