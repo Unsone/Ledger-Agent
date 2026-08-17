@@ -18,9 +18,9 @@
 ### 3. ~~Git 工具（DESIGN Phase 9）~~ ✅ 已完成（Update 006）
 - ~~结构化封装 status/diff/log/add/commit/push，安全层覆盖非 shell 工具~~
 
-### 4. 对话历史截断
-- **问题**：`chat()` 的 messages 无限增长，长会话撑爆 LLM 上下文窗口
-- **方案**：保留 system prompt + memory 上下文 + 最近 N 轮，超出时自动截断（滑动窗口）
+### 4. ~~对话历史截断~~ ✅ 已完成（Update 013）
+- ~~保留 system prompt 与最近 N 轮对话；默认 20 轮，可通过 `agent.max_history_turns` 配置~~
+- ~~在请求前截断，并在 LLM 调用失败时恢复完整的既有对话~~
 
 ### 5. ~~结构化输出（Pydantic schema）~~ ✅ 已完成（Update 010）
 - ~~Plan/Step Pydantic 模型 + LLM JSON mode（response_format），三层输出保障~~

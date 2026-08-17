@@ -29,6 +29,7 @@ class PersonalAgent:
     Phase 4：接入 Memory，自动携带用户画像与项目状态
     Phase 6：接入 Tools，shell / obsidian / task_inbox
     Phase 7：接入 Executor，/run 命令全自动执行任务
+    Phase 12：普通对话历史滑动窗口，避免长会话撑满 LLM 上下文
     """
 
     def __init__(self, config_dir: str = None, memory_dir: str = None):
@@ -98,24 +99,43 @@ class PersonalAgent:
         )
 
         # 初始化对话历史（含用户画像和项目状态）
+        self.max_history_turns = self.config.get("agent", {}).get("max_history_turns", 20)
+        if not isinstance(self.max_history_turns, int) or self.max_history_turns < 1:
+            raise ValueError("agent.max_history_turns 必须是大于 0 的整数")
         self.messages = [{"role": "system", "content": self._build_system_prompt()}]
 
     # ── 对话 ──────────────────────────────────────────────
 
     def chat(self, user_input: str) -> str:
         """单轮对话：将用户输入发送给 LLM，返回回复文本。"""
+        previous_messages = self.messages[:]
         self.messages.append({"role": "user", "content": user_input})
+        # 发送前保留 system prompt、当前输入和最近 N-1 轮，避免当前请求超出窗口。
+        self._trim_history(pending_user=True)
         try:
             response = self.llm.chat(self.messages)
             self.messages.append({"role": "assistant", "content": response})
+            self._trim_history()
             return response
         except Exception:
-            self.messages.pop()
+            # 请求失败不应丢失此前对话，也不保留未得到回复的本轮输入。
+            self.messages = previous_messages
             raise
 
     def clear_history(self):
         """清空对话历史，保留 system prompt 和 memory 上下文。"""
         self.messages = [{"role": "system", "content": self._build_system_prompt()}]
+
+    def _trim_history(self, pending_user: bool = False):
+        """保留 system prompt 和最近 ``max_history_turns`` 个完整对话轮次。
+
+        pending_user 为 True 时，最后一条是尚未得到回复的用户消息；因此只保留
+        当前输入及此前 N-1 个完整轮次，确保发送给 LLM 的上下文同样受上限约束。
+        """
+        if not isinstance(self.max_history_turns, int) or self.max_history_turns < 1:
+            raise ValueError("agent.max_history_turns 必须是大于 0 的整数")
+        keep_messages = self.max_history_turns * 2 - (1 if pending_user else 0)
+        self.messages = [self.messages[0], *self.messages[1:][-keep_messages:]]
 
     # ── 任务规划（Phase 3）────────────────────────────────
 
