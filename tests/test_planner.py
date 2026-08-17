@@ -51,7 +51,10 @@ class TestJSONParsing:
 
 
 class TestValidation:
-    """_validate：结构校验 + 步数限制 + risk 校验 + tool 校验。"""
+    """Plan Pydantic 模型校验：结构 + 步数限制 + risk 校验 + tool 校验。"""
+
+    # 与 Planner 相同的校验上下文
+    CONTEXT = {"valid_tools": {"shell", "none"}, "max_steps": 10}
 
     def valid_plan(self):
         return {
@@ -61,67 +64,85 @@ class TestValidation:
             ],
         }
 
-    def test_valid_plan_passes(self, planner):
-        """合法的 plan 应通过校验。"""
-        planner._validate(self.valid_plan())  # 不应抛异常
+    @staticmethod
+    def validate(data, **extra_context):
+        from agent.schemas import Plan
+        ctx = dict(TestValidation.CONTEXT)
+        ctx.update(extra_context)
+        return Plan.model_validate(data, context=ctx)
 
-    def test_missing_goal(self, planner):
+    def test_valid_plan_passes(self):
+        """合法的 plan 应通过校验。"""
+        self.validate(self.valid_plan())  # 不应抛异常
+
+    def test_missing_goal(self):
         """缺少 goal 字段。"""
         plan = self.valid_plan()
         del plan["goal"]
         with pytest.raises(ValueError, match="goal"):
-            planner._validate(plan)
+            self.validate(plan)
 
-    def test_empty_steps(self, planner):
+    def test_empty_steps(self):
         """steps 为空数组。"""
         plan = self.valid_plan()
         plan["steps"] = []
-        with pytest.raises(ValueError, match="非空"):
-            planner._validate(plan)
+        with pytest.raises(ValueError):
+            self.validate(plan)
 
-    def test_missing_field_in_step(self, planner):
+    def test_missing_field_in_step(self):
         """步骤缺少必填字段。"""
         plan = self.valid_plan()
         del plan["steps"][0]["tool"]
         with pytest.raises(ValueError, match="tool"):
-            planner._validate(plan)
+            self.validate(plan)
 
-    def test_invalid_risk_value(self, planner):
-        """无效的 risk 值应被拒绝。"""
+    def test_invalid_risk_value(self):
+        """无效的 risk 值应被拒绝（Pydantic Literal 校验）。"""
         plan = self.valid_plan()
         plan["steps"][0]["risk"] = "critical"  # 不是 low/medium/high
         with pytest.raises(ValueError, match="risk"):
-            planner._validate(plan)
+            self.validate(plan)
 
-    def test_valid_risk_values(self, planner):
+    def test_valid_risk_values(self):
         """low/medium/high 都应通过。"""
         for risk in ("low", "medium", "high"):
             plan = self.valid_plan()
             plan["steps"][0]["risk"] = risk
-            planner._validate(plan)  # 不应抛异常
+            self.validate(plan)  # 不应抛异常
 
-    def test_invalid_tool_name(self, planner):
+    def test_invalid_tool_name(self):
         """不在 registry 中的 tool 应被拒绝。"""
         plan = self.valid_plan()
         plan["steps"][0]["tool"] = "nonexistent_tool"
         with pytest.raises(ValueError, match="tool"):
-            planner._validate(plan)
+            self.validate(plan)
 
-    def test_none_tool_allowed(self, planner):
+    def test_none_tool_allowed(self):
         """tool=none 应通过校验。"""
         plan = self.valid_plan()
         plan["steps"][0]["tool"] = "none"
-        planner._validate(plan)  # 不应抛异常
+        self.validate(plan)  # 不应抛异常
 
-    def test_auto_fill_params(self, planner):
-        """缺少 params 字段时自动补齐。"""
+    def test_params_default_filled(self):
+        """缺少 params 字段时自动补齐（Pydantic default_factory）。"""
         plan = self.valid_plan()
         del plan["steps"][0]["params"]
-        planner._validate(plan)
-        assert "params" in plan["steps"][0]
-        assert plan["steps"][0]["params"] == {}
+        result = self.validate(plan)
+        assert result.steps[0].params == {}
 
-    def test_max_steps_exceeded(self, planner):
+    def test_typed_attributes(self):
+        """校验后返回的是类型化对象。"""
+        result = self.validate(self.valid_plan())
+        assert result.steps[0].id == 1
+        assert result.steps[0].risk == "low"
+
+    def test_model_dump_roundtrip(self):
+        """model_dump 输出可供 Executor 直接消费。"""
+        result = self.validate(self.valid_plan())
+        dumped = result.model_dump()
+        assert dumped == self.valid_plan()
+
+    def test_max_steps_exceeded(self):
         """超过 max_steps 应被拒绝。"""
         plan = {
             "goal": "太多步骤",
@@ -131,9 +152,9 @@ class TestValidation:
             ],
         }
         with pytest.raises(ValueError, match="步骤数"):
-            planner._validate(plan)
+            self.validate(plan)
 
-    def test_exact_max_steps_allowed(self, planner):
+    def test_exact_max_steps_allowed(self):
         """恰好 max_steps 步应通过。"""
         plan = {
             "goal": "刚好",
@@ -142,7 +163,7 @@ class TestValidation:
                 for i in range(1, 11)  # 10 步 = max_steps
             ],
         }
-        planner._validate(plan)  # 不应抛异常
+        self.validate(plan)  # 不应抛异常
 
 
 class TestRepair:
@@ -176,3 +197,53 @@ class TestRepair:
         user_message = mock_llm.messages_history[0][1]["content"]
         assert "权限不足" in user_message
         assert "失败" in user_message
+
+
+class TestJsonMode:
+    """plan() 应使用 LLM JSON mode。"""
+
+    def test_plan_uses_json_mode(self, planner, mock_llm):
+        """plan() 调用 LLM 时 json_mode=True。"""
+        mock_llm.next_response = json.dumps({
+            "goal": "测试",
+            "steps": [{"id": 1, "action": "a", "tool": "shell", "params": {}, "risk": "low"}],
+        }, ensure_ascii=False)
+        planner.plan("任务")
+        assert mock_llm.json_mode_calls == [True]
+
+    def test_plan_returns_dict_for_executor(self, planner, mock_llm):
+        """plan() 返回 dict（Executor 兼容）。"""
+        mock_llm.next_response = json.dumps({
+            "goal": "测试",
+            "steps": [{"id": 1, "action": "a", "tool": "shell", "params": {}, "risk": "low"}],
+        }, ensure_ascii=False)
+        result = planner.plan("任务")
+        assert isinstance(result, dict)
+        assert result["goal"] == "测试"
+        assert len(result["steps"]) == 1
+
+    def test_plan_retries_on_schema_violation(self, planner, mock_llm):
+        """第一次输出违反 schema（如无效 risk），第二次正确 → 成功。"""
+        invalid = json.dumps({
+            "goal": "测试",
+            "steps": [{"id": 1, "action": "a", "tool": "shell", "params": {}, "risk": "critical"}],
+        }, ensure_ascii=False)
+        valid = json.dumps({
+            "goal": "测试",
+            "steps": [{"id": 1, "action": "a", "tool": "shell", "params": {}, "risk": "low"}],
+        }, ensure_ascii=False)
+
+        # mock 依次返回：无效 → 有效
+        responses = iter([invalid, valid])
+        mock_llm.next_response = None
+
+        def chat(messages, json_mode=False):
+            mock_llm.call_count += 1
+            mock_llm.messages_history.append(messages)
+            mock_llm.json_mode_calls.append(json_mode)
+            return next(responses)
+
+        mock_llm.chat = chat
+        result = planner.plan("任务")
+        assert result["steps"][0]["risk"] == "low"
+        assert mock_llm.call_count == 2

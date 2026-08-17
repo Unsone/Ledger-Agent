@@ -1,6 +1,7 @@
 import json
 import re
 from agent.llm import LLM
+from agent.schemas import Plan
 
 
 class Planner:
@@ -8,9 +9,13 @@ class Planner:
 
     Phase 3：只负责拆解任务，不执行任何操作。
     后续 Phase 7 由 Executor 消费 Planner 的输出。
+
+    输出可靠性双保险：
+    1. LLM JSON mode（response_format）→ 保证合法 JSON
+    2. Pydantic Plan 模型校验 → 类型/枚举/工具/步数约束
     """
 
-    # JSON 解析失败时的最大重试次数
+    # JSON 解析或校验失败时的最大重试次数
     MAX_RETRIES = 2
 
     def __init__(self, llm: LLM, planner_prompt: str, tools_registry: dict = None, max_steps: int = 10):
@@ -43,7 +48,7 @@ class Planner:
             }
 
         Raises:
-            ValueError: LLM 返回内容无法解析为合法 JSON
+            ValueError: LLM 返回内容无法解析或校验失败
         """
         system_prompt = self._build_system_prompt()
         user_message = self._build_user_message(task, context)
@@ -53,14 +58,20 @@ class Planner:
             {"role": "user", "content": user_message},
         ]
 
+        # 校验上下文：运行时约束注入 Pydantic
+        validation_context = {
+            "valid_tools": set(self.tools_registry.keys()) | {"none"},
+            "max_steps": self.max_steps,
+        }
+
         last_error = None
         raw = ""  # 初始化，防止 LLM 调用直接抛异常时 UnboundLocalError
         for attempt in range(self.MAX_RETRIES + 1):
             try:
-                raw = self.llm.chat(messages)
-                result = self._parse_response(raw)
-                self._validate(result)
-                return result
+                raw = self.llm.chat(messages, json_mode=True)
+                data = self._parse_response(raw)
+                plan = Plan.model_validate(data, context=validation_context)
+                return plan.model_dump()
             except (json.JSONDecodeError, ValueError) as e:
                 last_error = e
                 if attempt < self.MAX_RETRIES:
@@ -69,7 +80,7 @@ class Planner:
                         {
                             "role": "user",
                             "content": (
-                                f"你上面的输出不是合法的 JSON。错误信息：{e}\n"
+                                f"你上面的输出不是合法的 JSON 或不符合 schema。错误信息：{e}\n"
                                 "请**只输出**正确的 JSON 对象，不要加 markdown 代码块标记。"
                             ),
                         }
@@ -165,47 +176,3 @@ class Planner:
             raw = m.group(1).strip()
 
         return json.loads(raw)
-
-    def _validate(self, result: dict):
-        """验证 Planner 输出的 JSON 结构是否符合规范（结构 + 安全 + 步数限制）。"""
-        if not isinstance(result, dict):
-            raise ValueError("输出必须是 JSON 对象（dict）")
-
-        if "goal" not in result:
-            raise ValueError("缺少 'goal' 字段")
-
-        steps = result.get("steps")
-        if not isinstance(steps, list) or len(steps) == 0:
-            raise ValueError("'steps' 必须是非空数组")
-
-        # 强制 max_steps（config.yaml 配置，默认 10）
-        if len(steps) > self.max_steps:
-            raise ValueError(
-                f"步骤数 {len(steps)} 超过最大限制 {self.max_steps}，请合并或精简"
-            )
-
-        valid_risks = {"low", "medium", "high"}
-        valid_tools = set(self.tools_registry.keys()) | {"none"}
-
-        for i, step in enumerate(steps):
-            if not isinstance(step, dict):
-                raise ValueError(f"steps[{i}] 必须是对象")
-            for field in ("id", "action", "tool", "risk"):
-                if field not in step:
-                    raise ValueError(f"steps[{i}] 缺少 '{field}' 字段")
-
-            # 校验 risk 值（防止 typo 如 "highh" 绕过安全检查）
-            if step["risk"] not in valid_risks:
-                raise ValueError(
-                    f"steps[{i}] risk='{step['risk']}' 无效，必须是 low/medium/high"
-                )
-
-            # 校验 tool 存在
-            if step["tool"] not in valid_tools:
-                raise ValueError(
-                    f"steps[{i}] tool='{step['tool']}' 不在可用工具列表中 ({', '.join(sorted(valid_tools))})"
-                )
-
-            # 自动补齐 params
-            if "params" not in step:
-                step["params"] = {}

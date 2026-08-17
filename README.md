@@ -162,10 +162,11 @@ clear            清空对话历史（保留 memory 上下文）
 
 ### LLM 输出可靠性
 
-- Planner 输出固定 JSON schema，含结构校验（必填字段、risk 枚举、tool 存在性、max_steps 上限）
-- 支持剥离 ```json 代码块包装
-- JSON 解析失败自动带错误信息重试（最多 2 次）
-- LLM 调用异常（网络/API）同样纳入重试
+三层保障确保 Planner 输出结构可靠：
+
+1. **JSON mode**：LLM 调用启用 `response_format={"type": "json_object"}`，从源头保证合法 JSON
+2. **Pydantic 校验**：`agent/schemas.py` 的 Plan/Step 模型做类型化校验（字段必填、risk 枚举、tool 存在性、max_steps 上限均通过 validation context 注入）
+3. **重试回路**：解析或校验失败自动带错误信息重试（最多 2 次），LLM 调用异常（网络/API）同样纳入重试
 
 ### 工具参数 Schema
 
@@ -178,7 +179,7 @@ clear            清空对话历史（保留 memory 上下文）
 
 ### 测试
 
-124 个 pytest 用例，全部可在无 API key、无网络环境下运行：
+129 个 pytest 用例，全部可在无 API key、无网络环境下运行：
 
 ```bash
 uv run pytest tests/ -v
@@ -197,7 +198,6 @@ uv run pytest tests/ -v
 |---|---|---|
 | P0 | 安全匹配器正则化 | 解决子串匹配误报与绕过 |
 | P1 | 对话历史截断 | 防止长会话撑爆上下文窗口 |
-| P1 | 结构化输出（Pydantic schema） | 替代手工 JSON 校验 |
 | P2 | RAG 长期记忆（Phase 11） | 向量数据库跨项目问答 |
 | P3 | Browser Agent（Phase 8） | 浏览器交互，超出搜索的网页操作 |
 

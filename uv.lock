@@ -454,6 +454,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "ddgs" },
     { name = "openai" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
 ]
@@ -467,6 +468,7 @@ dev = [
 requires-dist = [
     { name = "ddgs", specifier = ">=9.14.4" },
     { name = "openai", specifier = ">=2.53.0" },
+    { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]

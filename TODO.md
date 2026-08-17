@@ -25,10 +25,9 @@
 - **问题**：`chat()` 的 messages 无限增长，长会话撑爆 LLM 上下文窗口
 - **方案**：保留 system prompt + memory 上下文 + 最近 N 轮，超出时自动截断（滑动窗口）
 
-### 5. 结构化输出（Pydantic schema）
-- **问题**：Planner 输出靠手工 `_validate` 校验，报错信息粗
-- **方案**：用 Pydantic model 定义 Plan/Step，LLM 结构化输出模式（DeepSeek 支持 JSON mode）
-- **影响**：更可靠的格式保证、类型安全
+### 5. ~~结构化输出（Pydantic schema）~~ ✅ 已完成（Update 010）
+- ~~Plan/Step Pydantic 模型 + LLM JSON mode（response_format），三层输出保障~~
+- ~~129 测试全量通过~~
 
 ### 6. ~~代码运行工具~~ ✅ 已完成（Update 007）
 - ~~tools/python_runner.py：子进程隔离 + 超时 + 输出上限 + 结构化 traceback~~

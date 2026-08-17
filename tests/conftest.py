@@ -55,11 +55,13 @@ def mock_llm():
         def __init__(self):
             self.call_count = 0
             self.messages_history = []
+            self.json_mode_calls = []
             self.next_response = "{}"
 
-        def chat(self, messages):
+        def chat(self, messages, json_mode=False):
             self.call_count += 1
             self.messages_history.append(messages)
+            self.json_mode_calls.append(json_mode)
             return self.next_response
 
     return MockLLM()
