@@ -1,18 +1,20 @@
-# 危险命令规则 —— 独立于代码，方便随时增删而不用改 executor.py
-# mode: block 表示直接拒绝执行；confirm 表示需要用户二次确认才能执行
+# 危险命令规则（正则表达式）——独立于代码，方便随时增删而不用改 executor.py
+# 匹配时忽略大小写，并会先将全角字符规范化为半角，避免以大小写、空格或全角字符绕过规则。
+# block 表示直接拒绝执行；confirm 表示需要用户二次确认才能执行。
 
 blocked_patterns:
-  - "rm -rf"
-  - "rm -rf /"
-  - "format "
-  - "shutdown"
-  - "mkfs"
-  - ":(){:|:&};:"     # fork bomb
+  - '(?:^|[;&|]\s*|\s)rm\s+-(?=[a-z]*r)(?=[a-z]*f)[a-z]+\b'  # rm -rf / rm -fr，容忍空格和大小写
+  - '(?:^|[;&|]\s*|\s)rm\s+--recursive\s+--force\b'
+  - '(?:^|[;&|]\s*|\s)(?:rd|rmdir)(?=[^\r\n]*\s/s\b)(?=[^\r\n]*\s/q\b)'  # Windows 递归静默删目录
+  - '(?:^|[;&|]\s*|\s)format(?:\s|$)'  # 命令 format；不会匹配 Python 的 .format()
+  - '\bshutdown(?:\.exe)?\b'
+  - '\bmkfs(?:\.[a-z0-9_+-]+)?\b'
+  - ':\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:'  # fork bomb
 
 confirm_patterns:
-  - "git push"
-  - "git reset --hard"
-  - "del /"
-  - "Remove-Item"
-  - "pip install"
-  - "npm install"
+  - '\bgit\s+push\b'
+  - '\bgit\s+reset\s+--hard\b'
+  - '(?:^|[;&|]\s*|\s)(?:del|erase)\b'
+  - '\bremove-item\b'
+  - '\bpip\s+install\b'
+  - '\bnpm\s+install\b'

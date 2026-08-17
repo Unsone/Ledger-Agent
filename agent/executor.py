@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import yaml
 from pathlib import Path
 from agent.logger import get_logger
@@ -246,14 +247,18 @@ class Executor:
             str_params = " ".join(str(v) for v in params.values() if isinstance(v, str))
             check_text = f"{tool_name} {str_params}".strip()
 
+        # 统一全角/半角字符后做忽略大小写的正则匹配，避免通过
+        # `RＭ -rf`、`RM  -RF` 等等价写法绕过规则。
+        check_text = unicodedata.normalize("NFKC", check_text)
+
         # 1. 检查 blocked_patterns（最高优先级）
         for pattern in self.safety.get("blocked_patterns", []):
-            if pattern in check_text:
+            if re.search(pattern, check_text, re.IGNORECASE):
                 return "block"
 
         # 2. 检查 confirm_patterns
         for pattern in self.safety.get("confirm_patterns", []):
-            if pattern in check_text:
+            if re.search(pattern, check_text, re.IGNORECASE):
                 return "confirm"
 
         # 3. Planner 标注的 high risk → 升级为 confirm

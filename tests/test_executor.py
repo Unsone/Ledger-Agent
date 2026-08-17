@@ -47,10 +47,10 @@ class TestSafetyVerdicts:
 
     def test_confirm_git_push(self, executor):
         """git push 应标记为 confirm。"""
-        step = {"id": 1, "action": "推送", "tool": "shell",
-                "params": {"command": "git push origin main"}, "risk": "medium"}
-        r = executor.execute_step(step, auto_confirm=True)
-        assert r["verdict"] == "confirm"
+        verdict = executor._check_safety(
+            "shell", {"command": "git push origin main"}, "medium"
+        )
+        assert verdict == "confirm"
 
     def test_confirm_pip_install(self, executor):
         """pip install 应标记为 confirm。"""
@@ -87,6 +87,34 @@ class TestSafetyVerdicts:
                 "params": {"action": "status"}, "risk": "low"}
         r = executor.execute_step(step, auto_confirm=True)
         assert r["verdict"] == "allow"
+
+    @pytest.mark.parametrize("command", [
+        "RM  -RF C:/important",
+        "ＲＭ -ｒｆ C:/important",
+        "rd /s /q C:/important",
+        "RMDIR /Q /S C:/important",
+        "format D: /q",
+    ])
+    def test_blocked_regex_variants(self, command):
+        """大小写、空格、全角字符与 Windows 等价命令均不能绕过 block。"""
+        executor = Executor(tools={})
+        assert executor._check_safety("shell", {"command": command}, "low") == "block"
+
+    def test_python_format_method_is_not_blocked(self):
+        """Python 的 .format() 不是 Windows format 命令。"""
+        executor = Executor(tools={})
+        command = 'python -c "print(\'{}\'.format(\'ok\'))"'
+        assert executor._check_safety("shell", {"command": command}, "low") == "allow"
+
+    @pytest.mark.parametrize("command", [
+        "ERASE C:/temporary.txt",
+        "Remove-Item -Recurse -Force C:/temporary",
+        "Git   Push origin main",
+    ])
+    def test_confirmed_regex_variants(self, command):
+        """破坏性但可恢复/可控的命令应要求确认。"""
+        executor = Executor(tools={})
+        assert executor._check_safety("shell", {"command": command}, "low") == "confirm"
 
 
 class TestStepExecution:

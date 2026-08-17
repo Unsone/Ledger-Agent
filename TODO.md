@@ -9,12 +9,9 @@
 - ~~params_schema 双保险：Planner prompt 注入精确参数定义 + Executor 执行前必填校验~~
 - ~~124 测试全量通过，别名兼容保留为兜底~~
 
-### 2. 安全匹配器正则化
-- **问题**：`safety.yaml` 用子串 + 大小写敏感匹配：
-  - 误报：`"format "` 会 block 任何含 "format " 的命令（如 Python `.format()`）
-  - 绕过：`RＭ -rf`（全角）、`rm  -rf`（双空格）、`Git PUSH` 均可规避
-- **方案**：改为正则匹配 + `re.IGNORECASE`，补充 Windows 别名规则（`rd /s /q`、`erase`）
-- **影响**：安全模型可信度
+### 2. ~~安全匹配器正则化~~ ✅ 已完成（Update 012）
+- ~~正则 + `re.IGNORECASE` + Unicode NFKC 规范化，防止大小写、空格和全角字符绕过~~
+- ~~补充 Windows `rd/rmdir /s /q`、`erase`、`Remove-Item`；避免将 Python `.format()` 误判为 format 命令~~
 
 ## P1 — 重要功能
 
